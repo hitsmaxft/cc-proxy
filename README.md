@@ -187,7 +187,7 @@ uv run mypy src/
 ```
 claude-code-proxy/
 ├── src/
-│   ├── claude_to_openai_server.py  # Main server
+│   ├── main.py  # Main server
 │   ├── test_claude_to_openai.py    # Tests
 │   └── [other modules...]
 ├── start_proxy.py                  # Startup script
