@@ -43,7 +43,7 @@ Repository = "https://github.com/holegots/claude-code-proxy.git"
 Issues = "https://github.com/holegots/claude-code-proxy/issues"
 
 [project.scripts]
-claude-code-proxy = "src.claude_to_openai_server:main"
+claude-code-proxy = "src.main:main"
 
 [tool.uv]
 dev-dependencies = [
