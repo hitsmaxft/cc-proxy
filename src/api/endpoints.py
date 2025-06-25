@@ -17,9 +17,11 @@ from src.core.model_manager import model_manager
 router = APIRouter()
 
 openai_client = OpenAIClient(
-    config.openai_api_key, config.openai_base_url, config.request_timeout
+    config.openai_api_key,
+    config.openai_base_url,
+    config.request_timeout,
+    api_version=config.azure_api_version,
 )
-
 
 @router.post("/v1/messages")
 async def create_message(request: ClaudeMessagesRequest, http_request: Request):

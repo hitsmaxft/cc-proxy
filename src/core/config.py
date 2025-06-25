@@ -9,6 +9,7 @@ class Config:
             raise ValueError("OPENAI_API_KEY not found in environment variables")
         
         self.openai_base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.azure_api_version = os.environ.get("AZURE_API_VERSION")  # For Azure OpenAI
         self.host = os.environ.get("HOST", "0.0.0.0")
         self.port = int(os.environ.get("PORT", "8082"))
         self.log_level = os.environ.get("LOG_LEVEL", "INFO")
