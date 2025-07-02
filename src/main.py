@@ -53,7 +53,7 @@ def main():
         host=config.host,
         port=config.port,
         log_level=config.log_level.lower(),
-        reload=True,
+        reload=False,
     )
 
 

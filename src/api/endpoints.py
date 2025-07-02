@@ -86,11 +86,11 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request):
             # Check minimum tokens limit
             if "usage" in claude_response and "output_tokens" in claude_response["usage"]:
                 output_tokens = claude_response["usage"]["output_tokens"]
-                if output_tokens < config.min_tokens_limit:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Output tokens ({output_tokens}) is less than minimum limit ({config.min_tokens_limit}))",
-                    )
+                logger.debug(
+                    "Output tokens: %s, Minimum required: %s",
+                    output_tokens,
+                    getattr(config, "min_output_tokens", "unknown"),
+                )
             return claude_response
     except HTTPException:
         raise
