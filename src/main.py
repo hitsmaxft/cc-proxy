@@ -47,12 +47,20 @@ def main():
     print(f"   Server: {config.host}:{config.port}")
     print("")
 
+    # Parse log level - extract just the first word to handle comments
+    log_level = config.log_level.split()[0].lower()
+    
+    # Validate and set default if invalid
+    valid_levels = ['debug', 'info', 'warning', 'error', 'critical']
+    if log_level not in valid_levels:
+        log_level = 'info'
+
     # Start server
     uvicorn.run(
         "src.main:app",
         host=config.host,
         port=config.port,
-        log_level=config.log_level.lower(),
+        log_level=log_level,
         reload=False,
     )
 
