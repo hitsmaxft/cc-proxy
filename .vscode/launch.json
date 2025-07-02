@@ -12,6 +12,7 @@
       "args": [
         "src.main:app",
         "--reload",
+        "--port=8082"
       ],
       "jinja": true
     }

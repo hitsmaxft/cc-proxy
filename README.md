@@ -46,7 +46,7 @@ uv run claude-code-proxy
 ### 4. Use with Claude Code
 
 ```bash
-ANTHROPIC_BASE_URL=http://localhost:8082 claude
+ANTHROPIC_BASE_URL=http://localhost:8082 ANTHROPIC_AUTH_TOKEN="some-api-key" claude
 ```
 
 ## Configuration
