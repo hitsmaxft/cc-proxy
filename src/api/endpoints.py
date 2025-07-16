@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, Header, Depends
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from datetime import datetime
 import uuid
 from typing import Optional
@@ -15,8 +16,13 @@ from src.conversion.response_converter import (
     convert_openai_streaming_to_claude_with_cancellation,
 )
 from src.core.model_manager import model_manager
+from src.services.history_manager import history_manager
+from src.utils.token_counter import extract_token_usage, estimate_input_tokens_from_request
 
 router = APIRouter()
+
+# Setup Jinja2 templates
+templates = Jinja2Templates(directory="src/assets")
 
 openai_client = OpenAIClient(
     config.openai_api_key,
@@ -53,15 +59,14 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
         logger.debug(
             f"Processing Claude request: model={request.model}, stream={request.stream}"
         )
-        logger.debug(
-            f"Processing Claude request: headers={http_request.headers}"
-        )
 
         # Generate unique request ID for cancellation tracking
         request_id = str(uuid.uuid4())
 
         user_agent = "claude-cli/1.0.43 (external, proxy)"
 
+
+        # openrouter headers
         extra_headers = {
             "user_agent" : user_agent,
             "HTTP-Referer": "https:://claudecode.com",
@@ -79,7 +84,24 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
         # Convert Claude request to OpenAI format
         openai_request = convert_claude_to_openai(request, model_manager)
 
-        openai_request["extra_headers"] = extra_headers 
+        # pass extra_headers for openrouter
+        openai_request["extra_headers"] = extra_headers
+        
+        # Log the request to message history
+        await history_manager.log_request(
+            request_id=request_id,
+            model_name=request.model,
+            actual_model=openai_request["model"],
+            request_data={
+                "model": request.model,
+                "messages": request.messages,
+                "max_tokens": request.max_tokens,
+                "stream": request.stream,
+                "system": getattr(request, 'system', None)
+            },
+            user_agent=user_agent,
+            is_streaming=request.stream
+        ) 
 
         # Check if client disconnected before processing
         if await http_request.is_disconnected():
@@ -128,6 +150,30 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
             claude_response = convert_openai_to_claude_response(
                 openai_response, request
             )
+            
+            # Extract token usage from response
+            input_tokens, output_tokens, total_tokens = extract_token_usage(openai_response)
+            
+            # If tokens not found in response, estimate input tokens
+            if input_tokens == 0:
+                input_tokens = estimate_input_tokens_from_request({
+                    "model": request.model,
+                    "messages": request.messages,
+                    "system": getattr(request, 'system', None)
+                })
+                if total_tokens == 0:
+                    total_tokens = input_tokens + output_tokens
+            
+            # Log the response to message history
+            await history_manager.log_response(
+                request_id=request_id,
+                response_data=claude_response,
+                status="completed",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens
+            )
+            
             return claude_response
     except HTTPException:
         raise
@@ -229,11 +275,28 @@ async def test_connection():
         )
 
 
-@router.get("/")
-async def root():
-    """Serve the configuration UI"""
-    from fastapi.responses import FileResponse
-    return FileResponse("src/assets/config.html")
+@router.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the configuration UI with template rendering"""
+    # Pass environment variables and config data to template
+    template_vars = {
+        "request": request,
+        "default_port": config.port,
+        "page_title": "Claude Code Proxy Configuration",
+        "app_title": "Claude Code Proxy",
+        "app_description": "Configuration & Monitoring Interface",
+        "openai_base_url": config.openai_base_url,
+        "big_model": config.big_model,
+        "middle_model": config.middle_model,
+        "small_model": config.small_model,
+        "host": config.host,
+        "log_level": config.log_level,
+        "max_tokens_limit": config.max_tokens_limit,
+        "request_timeout": config.request_timeout,
+        "client_api_key_validation": bool(config.anthropic_api_key)
+    }
+    
+    return templates.TemplateResponse("config.html", template_vars)
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -296,4 +359,63 @@ async def update_config(request: ConfigUpdateRequest):
         }
     except Exception as e:
         logger.error(f"Error updating configuration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/history")
+async def get_message_history(limit: int = 5):
+    """Get recent message history"""
+    try:
+        if limit < 1 or limit > 50:
+            limit = 5
+            
+        history_response = await history_manager.get_recent_messages(limit)
+        
+        return {
+            "status": "success",
+            "data": history_response.dict(),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving message history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/history/{message_id}")
+async def get_message_details(message_id: int):
+    """Get detailed information for a specific message"""
+    try:
+        message = await history_manager.get_message_by_id(message_id)
+        
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        return {
+            "status": "success",
+            "data": message.dict(),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving message {message_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/summary")
+async def get_usage_summary():
+    """Get token usage summary aggregated by actual model"""
+    try:
+        summary = await history_manager.get_token_usage_summary()
+        
+        return {
+            "status": "success",
+            "data": summary,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving usage summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))

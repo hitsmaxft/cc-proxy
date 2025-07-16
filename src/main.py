@@ -11,10 +11,27 @@ from src.core.config import config
 
 def main():
 
+    # Disable various logging sources
     uvicorn_error = logging.getLogger("uvicorn.error")
-    #uvicorn_error.disabled = True
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.disabled = True
+    
+    # Disable HTTP client logging that shows the POST requests
+    http_loggers = [
+        "openai._base_client",
+        "httpx", 
+        "httpcore", 
+        "httpcore.connection",
+        "httpcore.http11",
+        "httpcore.http2",
+        "httpx._client",
+        "urllib3.connectionpool",
+        "requests.packages.urllib3.connectionpool"
+    ]
+    
+    for logger_name in http_loggers:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+        logging.getLogger(logger_name).disabled = True
 
     parser = argparse.ArgumentParser(description="Claude-to-OpenAI API Proxy v1.0.0")
     parser.add_argument("--env", help="Path to .env file", default=".env")
