@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Proxy Configuration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+
+        .config-panel, .logs-panel {
+            padding: 30px;
+        }
+
+        .config-panel {
+            border-right: 1px solid #e0e6ed;
+        }
+
+        .panel-title {
+            font-size: 1.5em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title::before {
+            content: "⚙️";
+            font-size: 1.2em;
+        }
+
+        .logs-panel .panel-title::before {
+            content: "📊";
+        }
+
+        .connection-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            border: 2px solid #e9ecef;
+        }
+
+        .connection-section h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            min-width: 80px;
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #4facfe;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .model-section {
+            margin-bottom: 25px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .model-section:hover {
+            border-color: #4facfe;
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.1);
+        }
+
+        .model-section h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .model-section h3::before {
+            content: "🤖";
+            font-size: 1.2em;
+        }
+
+        .model-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .model-option {
+            position: relative;
+        }
+
+        .model-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .model-option label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 18px;
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            min-width: 120px;
+            justify-content: center;
+        }
+
+        .model-option input[type="radio"]:checked + label {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border-color: #4facfe;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.3);
+        }
+
+        .model-option label::before {
+            content: "○";
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+        }
+
+        .model-option input[type="radio"]:checked + label::before {
+            content: "●";
+            color: white;
+        }
+
+        .base-url {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+            color: #495057;
+            border-left: 4px solid #4facfe;
+        }
+
+        .logs-content {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 300px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .log-entry {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 5px;
+            border-left: 3px solid #3498db;
+            background: rgba(52, 152, 219, 0.1);
+        }
+
+        .log-timestamp {
+            color: #95a5a6;
+            font-size: 0.8em;
+        }
+
+        .health-status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .health-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+        }
+
+        .health-item.error {
+            border-left-color: #dc3545;
+        }
+
+        .health-item.warning {
+            border-left-color: #ffc107;
+        }
+
+        .health-item strong {
+            display: block;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4facfe;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .last-update {
+            color: #6c757d;
+            font-size: 0.9em;
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .config-panel {
+                border-right: none;
+                border-bottom: 1px solid #e0e6ed;
+            }
+            
+            .model-options {
+                flex-direction: column;
+            }
+            
+            .health-status {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Claude Code Proxy</h1>
+            <p>Configuration & Monitoring Interface</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Configuration Panel -->
+            <div class="config-panel">
+                <h2 class="panel-title">Configuration</h2>
+
+                <!-- Connection Settings -->
+                <div class="connection-section">
+                    <h3>Connection Settings</h3>
+                    <div class="input-group">
+                        <label for="port">Port:</label>
+                        <input type="number" id="port" value="8082" min="1" max="65535">
+                        <button class="btn btn-primary" onclick="connectToProxy()">Connect</button>
+                        <span id="connectionStatus" class="status-indicator status-disconnected">
+                            Disconnected
+                        </span>
+                    </div>
+                    <div class="auto-refresh">
+                        <input type="checkbox" id="autoRefresh" checked>
+                        <label for="autoRefresh">Auto-refresh every 3 seconds</label>
+                    </div>
+                </div>
+
+                <div id="configContent" style="display: none;">
+                    <!-- Base URL Display -->
+                    <div class="base-url" id="baseUrl">
+                        Loading...
+                    </div>
+
+                    <!-- Big Models -->
+                    <div class="model-section">
+                        <h3>🔥 Big Models</h3>
+                        <div class="model-options" id="bigModels">
+                            <!-- Dynamic content -->
+                        </div>
+                        <div id="bigModelCount" style="margin-top: 10px; font-size: 0.9em; color: #6c757d;"></div>
+                    </div>
+
+                    <!-- Middle Models -->
+                    <div class="model-section">
+                        <h3>⚡ Middle Models</h3>
+                        <div class="model-options" id="middleModels">
+                            <!-- Dynamic content -->
+                        </div>
+                        <div id="middleModelCount" style="margin-top: 10px; font-size: 0.9em; color: #6c757d;"></div>
+                    </div>
+
+                    <!-- Small Models -->
+                    <div class="model-section">
+                        <h3>🚀 Small Models</h3>
+                        <div class="model-options" id="smallModels">
+                            <!-- Dynamic content -->
+                        </div>
+                        <div id="smallModelCount" style="margin-top: 10px; font-size: 0.9em; color: #6c757d;"></div>
+                    </div>
+
+                    <!-- Model Usage Statistics -->
+                    <div class="model-section">
+                        <h3>📈 Model Usage Statistics</h3>
+                        <div id="modelUsageStats" style="font-family: monospace; font-size: 0.9em; line-height: 1.6; max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                            Loading statistics...
+                        </div>
+                    </div>
+
+                    <div class="last-update" id="lastUpdate"></div>
+                </div>
+
+                <div id="message" class="message"></div>
+            </div>
+
+            <!-- Logs Panel -->
+            <div class="logs-panel">
+                <h2 class="panel-title">System Health & Logs</h2>
+
+                <div id="healthContent" style="display: none;">
+                    <div class="health-status" id="healthStatus">
+                        <!-- Dynamic health status -->
+                    </div>
+
+                    <div class="logs-content" id="logsContent">
+                        <div class="log-entry">
+                            <span class="log-timestamp">[--:--:--]</span> Waiting for connection...
+                        </div>
+                    </div>
+                </div>
+
+                <div id="logsPlaceholder" style="text-align: center; padding: 50px; color: #6c757d;">
+                    <div class="loading" style="margin-bottom: 20px;"></div>
+                    <p>Connect to proxy to view health status and logs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let baseUrl = '';
+        let autoRefreshInterval = null;
+        let recentChanges = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-refresh checkbox handler
+            document.getElementById('autoRefresh').addEventListener('change', function() {
+                if (this.checked && baseUrl) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+        });
+
+        function connectToProxy() {
+            const port = document.getElementById('port').value;
+            baseUrl = `http://localhost:${port}`;
+            
+            showMessage('Connecting to proxy...', 'info');
+            updateConnectionStatus('loading', 'Connecting...');
+            
+            // Test connection
+            fetchConfig()
+                .then(() => {
+                    updateConnectionStatus('connected', 'Connected');
+                    showMessage('Successfully connected to proxy!', 'success');
+                    document.getElementById('configContent').style.display = 'block';
+                    document.getElementById('healthContent').style.display = 'block';
+                    document.getElementById('logsPlaceholder').style.display = 'none';
+                    
+                    // Start auto-refresh if enabled
+                    if (document.getElementById('autoRefresh').checked) {
+                        startAutoRefresh();
+                    }
+                    
+                    // Initial data load
+                    loadHealthData();
+                })
+                .catch(error => {
+                    updateConnectionStatus('disconnected', 'Connection Failed');
+                    showMessage(`Connection failed: ${error.message}`, 'error');
+                    document.getElementById('configContent').style.display = 'none';
+                    document.getElementById('healthContent').style.display = 'none';
+                    document.getElementById('logsPlaceholder').style.display = 'block';
+                });
+        }
+
+        function updateConnectionStatus(status, text) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = `status-indicator status-${status}`;
+            statusEl.textContent = text;
+        }
+
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+            
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 5000);
+        }
+
+        async function fetchConfig() {
+            const response = await fetch(`${baseUrl}/api/config/get`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            
+            updateConfigDisplay(data);
+            return data;
+        }
+
+        async function fetchHealth() {
+            const response = await fetch(`${baseUrl}/health`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return await response.json();
+        }
+
+        function updateConfigDisplay(config) {
+            // Update base URL
+            document.getElementById('baseUrl').textContent = `Base URL: ${config.base_url}`;
+            
+            // Update model sections
+            updateModelSection('bigModels', 'BIG_MODEL', config.available.BIG_MODELS, config.current.BIG_MODEL);
+            updateModelSection('middleModels', 'MIDDLE_MODEL', config.available.MIDDLE_MODELS, config.current.MIDDLE_MODEL);
+            updateModelSection('smallModels', 'SMALL_MODEL', config.available.SMALL_MODELS, config.current.SMALL_MODEL);
+            
+            // Update model counts and usage statistics
+            if (config.model_counts) {
+                updateModelCounts(config.model_counts);
+            }
+            
+            // Update last update time
+            document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        function updateModelSection(containerId, modelType, availableModels, currentModel) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            availableModels.forEach(model => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'model-option';
+                
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.name = modelType;
+                input.value = model;
+                input.id = `${modelType}_${model}`;
+                input.checked = model === currentModel;
+                input.addEventListener('change', () => updateModel(modelType, model));
+                
+                const label = document.createElement('label');
+                label.htmlFor = input.id;
+                label.textContent = model;
+                
+                optionDiv.appendChild(input);
+                optionDiv.appendChild(label);
+                container.appendChild(optionDiv);
+            });
+        }
+
+        async function updateModel(modelType, modelValue) {
+            try {
+                const updateData = {};
+                updateData[modelType] = modelValue;
+                
+                const response = await fetch(`${baseUrl}/api/config/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updateData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                showMessage(`Updated ${modelType} to ${modelValue}`, 'success');
+                
+                // Add to recent changes
+                const timestamp = new Date().toLocaleTimeString();
+                recentChanges.push(`${timestamp}: ${modelType} → ${modelValue}`);
+                if (recentChanges.length > 5) {
+                    recentChanges.shift();
+                }
+                
+                // Refresh config to show updated state
+                setTimeout(fetchConfig, 500);
+                
+            } catch (error) {
+                showMessage(`Failed to update model: ${error.message}`, 'error');
+                // Revert the radio button selection
+                fetchConfig();
+            }
+        }
+
+        async function loadHealthData() {
+            try {
+                const health = await fetchHealth();
+                updateHealthDisplay(health);
+            } catch (error) {
+                console.error('Failed to load health data:', error);
+            }
+        }
+
+        function updateHealthDisplay(health) {
+            const healthStatus = document.getElementById('healthStatus');
+            healthStatus.innerHTML = `
+                <div class="health-item ${health.status !== 'healthy' ? 'error' : ''}">
+                    <strong>Status</strong>
+                    ${health.status}
+                </div>
+                <div class="health-item">
+                    <strong>API Key Configured</strong>
+                    ${health.openai_api_configured ? 'Yes' : 'No'}
+                </div>
+                <div class="health-item ${!health.api_key_valid ? 'error' : ''}">
+                    <strong>API Key Valid</strong>
+                    ${health.api_key_valid ? 'Yes' : 'No'}
+                </div>
+                <div class="health-item">
+                    <strong>Client Validation</strong>
+                    ${health.client_api_key_validation ? 'Enabled' : 'Disabled'}
+                </div>
+            `;
+            
+            // Update logs
+            updateLogs();
+        }
+
+        function updateLogs() {
+            const logsContent = document.getElementById('logsContent');
+            let logs = [`[${new Date().toLocaleTimeString()}] System health checked`];
+            
+            // Add recent changes to logs
+            logs = logs.concat(recentChanges.map(change => `[LOG] ${change}`));
+            
+            logsContent.innerHTML = logs.map(log => 
+                `<div class="log-entry">${log}</div>`
+            ).join('');
+            
+            // Scroll to bottom
+            logsContent.scrollTop = logsContent.scrollHeight;
+        }
+        
+        function updateModelCounts(modelCounts) {
+            if (!modelCounts) return;
+            
+            // Update individual model counts
+            const bigCount = modelCounts['self.big_model'] || 0;
+            const middleCount = modelCounts['self.middle_model'] || 0;
+            const smallCount = modelCounts['self.small_model'] || 0;
+            
+            document.getElementById('bigModelCount').innerHTML = 
+                `<strong>Usage: ${bigCount}</strong> requests`;
+            document.getElementById('middleModelCount').innerHTML = 
+                `<strong>Usage: ${middleCount}</strong> requests`;
+            document.getElementById('smallModelCount').innerHTML = 
+                `<strong>Usage: ${smallCount}</strong> requests`;
+            
+            // Update detailed usage statistics
+            const statsContainer = document.getElementById('modelUsageStats');
+            const sortedCounts = Object.entries(modelCounts)
+                .map(([model, count]) => ({model: model.replace('self.',''), count: count || 0}))
+                .sort((a, b) => b.count - a.count);
+            
+            if (sortedCounts.length === 0) {
+                statsContainer.innerHTML = '<div style="color: #6c757d; text-align: center;">No usage data available</div>';
+                return;
+            }
+            
+            const totalRequests = sortedCounts.reduce((sum, item) => sum + item.count, 0);
+            let statsHTML = '';
+            
+            sortedCounts.forEach(({model, count}) => {
+                if (count > 0) {
+                    const percentage = totalRequests > 0 ? ((count / totalRequests) * 100).toFixed(1) : 0;
+                    const barWidth = Math.min(100, percentage * 0.8); // Scale bar intentionally smaller
+                    
+                    statsHTML += `
+                        <div style="margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="font-weight: 500;">${model}</span>
+                                <span style="color: #495057;">${count} requests (${percentage}%)</span>
+                            </div>
+                            <div style="background: #e9ecef; height: 12px; border-radius: 6px; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #4facfe, #00f2fe); 
+                                            width: ${barWidth}%; height: 100%; border-radius: 6px; 
+                                            transition: width 0.5s ease; display: flex; align-items: center; justify-content: flex-end;">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (statsHTML === '') {
+                statsContainer.innerHTML = '<div style="color: #6c757d; text-align: center;">No requests yet</div>';
+            } else {
+                statsContainer.innerHTML = statsHTML + 
+                    `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6; color: #495057;">
+                        <strong>Total requests: ${totalRequests}</strong>
+                    </div>`;
+            }
+        }
+
+        function startAutoRefresh() {
+            stopAutoRefresh(); // Clear any existing interval
+            autoRefreshInterval = setInterval(async () => {
+                if (baseUrl) {
+                    try {
+                        await fetchConfig();
+                        await loadHealthData();
+                    } catch (error) {
+                        console.error('Auto-refresh failed:', error);
+                    }
+                }
+            }, 3000);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+    </script>
+</body>
+</html>
