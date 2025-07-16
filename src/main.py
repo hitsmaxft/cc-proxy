@@ -1,16 +1,39 @@
 from fastapi import FastAPI
-from src.api.endpoints import router as api_router
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import sys
+import argparse
+import os
+import logging
+from dotenv import load_dotenv
 from src.core.config import config
-
-app = FastAPI(title="Claude-to-OpenAI API Proxy", version="1.0.0")
-
-app.include_router(api_router)
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "--help":
+
+    uvicorn_error = logging.getLogger("uvicorn.error")
+    #uvicorn_error.disabled = True
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.disabled = True
+
+    parser = argparse.ArgumentParser(description="Claude-to-OpenAI API Proxy v1.0.0")
+    parser.add_argument("--env", help="Path to .env file", default=".env")
+    args = parser.parse_args()
+    
+    # Load environment variables from specified file
+    if os.path.exists(args.env):
+        load_dotenv(args.env)
+        print(f"✅ Loaded environment from: {args.env}")
+    elif args.env != ".env":
+        print(f"⚠️ Warning: Specified env file not found: {args.env}")
+    
+    # Reinitialize config after loading env
+    from src.core.config import init_config
+    global config
+    config = init_config()
+    
+    # Keep the old help logic for backward compatibility
+    if "--help" in sys.argv:
         print("Claude-to-OpenAI API Proxy v1.0.0")
         print("")
         print("Usage: python src/main.py")
@@ -33,6 +56,9 @@ def main():
         print(f"  MAX_TOKENS_LIMIT - Token limit (default: 4096)")
         print(f"  MIN_TOKENS_LIMIT - Minimum token limit (default: 100)")
         print(f"  REQUEST_TIMEOUT - Request timeout in seconds (default: 90)")
+        print("")
+        print("Command line options:")
+        print("  --env PATH - Path to .env file (default: .env)")
         print("")
         print("Model mapping:")
         print(f"  Claude haiku models -> {config.small_model}")
@@ -60,13 +86,28 @@ def main():
     if log_level not in valid_levels:
         log_level = 'info'
 
+    from src.api.endpoints import router as api_router
+    app = FastAPI(title="Claude-to-OpenAI API Proxy", version="1.0.0")
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow all origins for development
+        allow_credentials=True,
+        allow_methods=["*"],  # Allow all HTTP methods
+        allow_headers=["*"],  # Allow all headers
+    )
+
+    app.include_router(api_router)
+
     # Start server
     uvicorn.run(
-        "src.main:app",
+        app,
         host=config.host,
         port=config.port,
         log_level=log_level,
         reload=False,
+        access_log=False,
     )
 
 

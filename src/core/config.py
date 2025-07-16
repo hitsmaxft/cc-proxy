@@ -30,6 +30,11 @@ class Config:
         self.middle_model = os.environ.get("MIDDLE_MODEL", self.big_model)
         self.small_model = os.environ.get("SMALL_MODEL", "gpt-4o-mini")
         
+        # Available model lists for CLI
+        self.big_models = [m.strip() for m in os.environ.get("BIG_MODELS", self.big_model).split(",")]
+        self.middle_models = [m.strip() for m in os.environ.get("MIDDLE_MODELS",self.middle_model).split(",")]
+        self.small_models = [m.strip() for m in os.environ.get("SMALL_MODELS",self.small_model).split(",")]
+        
     def validate_api_key(self):
         """Basic API key validation"""
         if not self.openai_api_key:
@@ -48,9 +53,19 @@ class Config:
         # Check if the client's API key matches the expected value
         return client_api_key == self.anthropic_api_key
 
-try:
-    config = Config()
-    print(f" Configuration loaded: API_KEY={'*' * 20}..., BASE_URL='{config.openai_base_url}'")
-except Exception as e:
-    print(f"=4 Configuration Error: {e}")
-    sys.exit(1)
+# Global config instance - will be initialized from main.py
+config = None
+
+def init_config():
+    """Initialize global config instance"""
+    global config
+    try:
+        config = Config()
+        print(f" Configuration loaded: API_KEY={'*' * 20}..., BASE_URL='{config.openai_base_url}'")
+        return config
+    except Exception as e:
+        print(f"=4 Configuration Error: {e}")
+        sys.exit(1)
+
+# Initialize config by default for backward compatibility
+#config = init_config()

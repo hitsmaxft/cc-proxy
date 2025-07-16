@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, Header, Depends
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from datetime import datetime
 import uuid
 from typing import Optional
+from pydantic import BaseModel
 
 from src.core.config import config
 from src.core.logging import logger
@@ -52,12 +53,33 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
         logger.debug(
             f"Processing Claude request: model={request.model}, stream={request.stream}"
         )
+        logger.debug(
+            f"Processing Claude request: headers={http_request.headers}"
+        )
 
         # Generate unique request ID for cancellation tracking
         request_id = str(uuid.uuid4())
 
+        user_agent = "claude-cli/1.0.43 (external, proxy)"
+
+        extra_headers = {
+            "user_agent" : user_agent,
+            "HTTP-Referer": "https:://claudecode.com",
+            'X-Title': 'ClaudeCode'
+        }
+
+        if "user_agent" in http_request.headers:
+            user_agent = http_request.headers.get("user_agent")
+
+        for key in http_request.headers:
+            if "anthropic" in key or "claude" in key:
+                extra_headers[key] =http_request.headers[key] 
+            
+
         # Convert Claude request to OpenAI format
         openai_request = convert_claude_to_openai(request, model_manager)
+
+        openai_request["extra_headers"] = extra_headers 
 
         # Check if client disconnected before processing
         if await http_request.is_disconnected():
@@ -209,7 +231,20 @@ async def test_connection():
 
 @router.get("/")
 async def root():
-    """Root endpoint"""
+    """Serve the configuration UI"""
+    from fastapi.responses import FileResponse
+    return FileResponse("src/assets/config.html")
+
+
+class ConfigUpdateRequest(BaseModel):
+    BIG_MODEL: Optional[str] = None
+    MIDDLE_MODEL: Optional[str] = None
+    SMALL_MODEL: Optional[str] = None
+
+
+@router.get("/api/config/get")
+async def get_config():
+    """Get current model configuration and available options"""
     return {
         "message": "Claude-to-OpenAI API Proxy v1.0.0",
         "status": "running",
@@ -221,10 +256,44 @@ async def root():
             "big_model": config.big_model,
             "small_model": config.small_model,
         },
-        "endpoints": {
-            "messages": "/v1/messages",
-            "count_tokens": "/v1/messages/count_tokens",
-            "health": "/health",
-            "test_connection": "/test-connection",
+        "current": {
+            "BIG_MODEL": config.big_model,
+            "MIDDLE_MODEL": config.middle_model,
+            "SMALL_MODEL": config.small_model
         },
+        "available": {
+            "BIG_MODELS": config.big_models,
+            "MIDDLE_MODELS": config.middle_models,
+            "SMALL_MODELS": config.small_models
+        },
+        "base_url": config.openai_base_url,
+        "model_counts": model_manager.get_model_counters()
     }
+
+
+@router.post("/api/config/update")
+async def update_config(request: ConfigUpdateRequest):
+    """Update model configuration dynamically"""
+    try:
+        # Update config in memory
+        if request.BIG_MODEL is not None:
+            config.big_model = request.BIG_MODEL
+        if request.MIDDLE_MODEL is not None:
+            config.middle_model = request.MIDDLE_MODEL
+        if request.SMALL_MODEL is not None:
+            config.small_model = request.SMALL_MODEL
+        
+        # Return updated configuration
+        return {
+            "status": "success",
+            "message": "Configuration updated successfully",
+            "current": {
+                "BIG_MODEL": config.big_model,
+                "MIDDLE_MODEL": config.middle_model,
+                "SMALL_MODEL": config.small_model
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error updating configuration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

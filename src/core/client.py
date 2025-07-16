@@ -102,7 +102,7 @@ class OpenAIClient:
             if "stream_options" not in request:
                 request["stream_options"] = {}
             request["stream_options"]["include_usage"] = True
-            
+
             # Create the streaming completion
             streaming_completion = await self.client.chat.completions.create(**request)
             
