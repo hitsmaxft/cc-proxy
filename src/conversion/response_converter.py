@@ -3,6 +3,7 @@ import uuid
 from fastapi import HTTPException, Request
 from src.core.constants import Constants
 from src.models.claude import ClaudeMessagesRequest
+from src.services.history_manager import history_manager
 
 
 def convert_openai_to_claude_response(
@@ -239,6 +240,10 @@ async def convert_openai_streaming_to_claude_with_cancellation(
     final_stop_reason = Constants.STOP_END_TURN
     usage_data = {"input_tokens": 0, "output_tokens": 0}
 
+    content = ""
+    stream_ended_normally = False
+    usage_data_received = False
+
     try:
         async for line in openai_stream:
             # Check if client disconnected
@@ -251,6 +256,7 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                 if line.startswith("data: "):
                     chunk_data = line[6:]
                     if chunk_data.strip() == "[DONE]":
+                        stream_ended_normally = True
                         break
 
                     try:
@@ -267,6 +273,8 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                                 'output_tokens': usage.get('completion_tokens', 0),
                                 'cache_read_input_tokens': cache_read_input_tokens
                             }
+                            usage_data_received = True
+
                         choices = chunk.get("choices", [])
                         if not choices:
                             continue
@@ -282,6 +290,7 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
                     # Handle text delta
                     if delta and "content" in delta and delta["content"] is not None:
+                        content += delta["content"]
                         yield f"event: {Constants.EVENT_CONTENT_BLOCK_DELTA}\ndata: {json.dumps({'type': Constants.EVENT_CONTENT_BLOCK_DELTA, 'index': text_block_index, 'delta': {'type': Constants.DELTA_TEXT, 'text': delta['content']}}, ensure_ascii=False)}\n\n"
 
                     # Handle tool call deltas with improved incremental processing
@@ -345,6 +354,7 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                             final_stop_reason = Constants.STOP_END_TURN
                         else:
                             final_stop_reason = Constants.STOP_END_TURN
+                        stream_ended_normally = True
 
     except HTTPException as e:
         # Handle cancellation
@@ -381,5 +391,43 @@ async def convert_openai_streaming_to_claude_with_cancellation(
         if tool_data.get("started") and tool_data.get("claude_index") is not None:
             yield f"event: {Constants.EVENT_CONTENT_BLOCK_STOP}\ndata: {json.dumps({'type': Constants.EVENT_CONTENT_BLOCK_STOP, 'index': tool_data['claude_index']}, ensure_ascii=False)}\n\n"
 
+    # Ensure message history is updated with final state
+    if not usage_data_received or usage_data.get("input_tokens", 0) == 0:
+        # Estimate tokens if no usage data was received
+        from src.utils.token_counter import estimate_input_tokens_from_request, estimate_output_tokens_from_content
+        estimated_input = estimate_input_tokens_from_request({
+            "model": original_request.model,
+            "messages": original_request.messages,
+            "system": getattr(original_request, 'system', None)
+        })
+        estimated_output = estimate_output_tokens_from_content(content)
+        
+        if not usage_data_received:
+            usage_data = {
+                "input_tokens": estimated_input,
+                "output_tokens": estimated_output,
+                "cache_read_input_tokens": 0
+            }
+        else:
+            # Fill in missing data
+            if usage_data.get("input_tokens", 0) == 0:
+                usage_data["input_tokens"] = estimated_input
+            if usage_data.get("output_tokens", 0) == 0:
+                usage_data["output_tokens"] = estimated_output
+    
+    # Always log the final response state
+    await history_manager.log_response(
+        request_id=request_id,
+        response_data={
+            "content": content,
+            "tool_calls": current_tool_calls,
+            "stop_reason": final_stop_reason
+        },
+        status="completed" if stream_ended_normally else "partial",
+        input_tokens=usage_data.get("input_tokens", 0),
+        output_tokens=usage_data.get("output_tokens", 0),
+        total_tokens=usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0)
+    )
+    
     yield f"event: {Constants.EVENT_MESSAGE_DELTA}\ndata: {json.dumps({'type': Constants.EVENT_MESSAGE_DELTA, 'delta': {'stop_reason': final_stop_reason, 'stop_sequence': None}, 'usage': usage_data}, ensure_ascii=False)}\n\n"
     yield f"event: {Constants.EVENT_MESSAGE_STOP}\ndata: {json.dumps({'type': Constants.EVENT_MESSAGE_STOP}, ensure_ascii=False)}\n\n"

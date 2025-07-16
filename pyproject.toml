@@ -30,6 +30,7 @@ dependencies = [
     "openai>=1.54.0",
     "httpx[socks]>=0.28.1",
     "requests>=2.32.4",
+    "aiosqlite>=0.21.0",
 ]
 
 [project.optional-dependencies]
