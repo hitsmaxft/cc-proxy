@@ -1,25 +1,33 @@
-# Claude Code Proxy (Enhanced)
+# CC-Proxy
 
-A proxy server that enables **Claude Code** to work with OpenAI-compatible API providers. Convert Claude API requests to OpenAI API calls, allowing you to use various LLM providers through the Claude Code CLI.
+**An enhanced Claude API proxy with advanced features and web UI management**
 
-![Claude Code Proxy](images/main.png)
-![Claude Code Proxy](images/messages.png)
-![Claude Code Proxy](images/summary.png)
+CC-Proxy is a powerful proxy server that significantly improves upon the upstream Claude Code proxy project. It enables **Claude Code** to work with OpenAI-compatible API providers while providing a comprehensive web interface for model management, cost tracking, and message history.
 
-![Claude Code Proxy](demo.png)
+![CC-Proxy Web UI](images/main.png)
+![Message History](images/messages.png)
+![Token Cost Summary](images/summary.png)
 
-## Features
+![CC-Proxy Demo](demo.png)
 
+## Key Features
+
+### Core Proxy Features
 - **Full Claude API Compatibility**: Complete `/v1/messages` endpoint support
 - **Multiple Provider Support**: OpenAI, Azure OpenAI, local models (Ollama), and any OpenAI-compatible API
-- **Smart Model Mapping**: Configure BIG and SMALL models via environment variables
+- **Smart Model Mapping**: Configure BIG, MIDDLE, and SMALL models via environment variables
 - **Function Calling**: Complete tool use support with proper conversion
 - **Streaming Responses**: Real-time SSE streaming support
 - **Image Support**: Base64 encoded image input
 - **Error Handling**: Comprehensive error handling and logging
-- **Web Config UI**: 
-- **Local Message History**:
-- **Model Token Summary**:
+
+### Enhanced Web UI Features
+- **Web Configuration Interface**: Easy model and provider configuration through web UI
+- **Message History Tracking**: Complete conversation history with search and filtering
+- **Token Cost Analysis**: Real-time token usage tracking and cost analysis across models
+- **Multi-Model Switching**: Dynamic model switching with usage comparison
+- **Web Search Integration**: Built-in web search capabilities (currently supports OpenRoute)
+- **Usage Analytics**: Detailed statistics and usage patterns
 
 ## Quick Start
 
@@ -160,17 +168,28 @@ response = httpx.post(
 )
 ```
 
+## Why Choose CC-Proxy
+
+CC-Proxy enhances the original Claude Code proxy with powerful new features:
+
+- **Web UI Dashboard**: Monitor usage, costs, and performance in real-time
+- **Message History**: Complete conversation tracking with search capabilities  
+- **Token Analytics**: Detailed cost analysis across different models
+- **Web Search**: Integrated search functionality for enhanced responses
+- **Multi-Model Management**: Easy switching and comparison between models
+
 ## Integration with Claude Code
 
-This proxy is designed to work seamlessly with Claude Code CLI:
+CC-Proxy works seamlessly with Claude Code CLI while providing enhanced monitoring:
 
 ```bash
-# Start the proxy
+# Start CC-Proxy
 python start_proxy.py
 
-# Use Claude Code with the proxy
+# Use Claude Code with CC-Proxy
 ANTHROPIC_BASE_URL=http://localhost:8082 claude
 
+# Access web interface at http://localhost:8082/
 # Or set permanently
 export ANTHROPIC_BASE_URL=http://localhost:8082
 claude
@@ -207,14 +226,19 @@ uv run mypy src/
 ### Project Structure
 
 ```
-claude-code-proxy/
+cc-proxy/
 ├── src/
-│   ├── main.py  # Main server
-│   ├── test_claude_to_openai.py    # Tests
+│   ├── main.py                     # Main proxy server
+│   ├── web_ui/                     # Web interface components
+│   ├── models/                     # Data models and schemas
+│   ├── utils/                      # Utility functions
+│   ├── test_claude_to_openai.py    # Comprehensive tests
 │   └── [other modules...]
+├── static/                         # Web UI static assets
+├── templates/                      # Web UI templates
 ├── start_proxy.py                  # Startup script
-├── .env.example                    # Config template
-└── README.md                       # This file
+├── .env.example                    # Configuration template
+└── README.md                       # This documentation
 ```
 
 ## Performance
