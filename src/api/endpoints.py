@@ -420,3 +420,52 @@ async def get_usage_summary():
         logger.error(f"Error retrieving usage summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/api/credits")
+async def get_openrouter_credits():
+    """Get OpenRouter credits information"""
+    try:
+        # Check if we're using OpenRouter
+        if "openrouter.ai" not in config.openai_base_url:
+            return {
+                "status": "not_openrouter",
+                "message": "Not using OpenRouter base URL",
+                "data": None
+            }
+        
+        # Import aiohttp for making the request
+        import requests
+        
+        headers = {
+            "Authorization": f"Bearer {config.openai_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+
+        response = requests.get("https://openrouter.ai/api/v1/credits", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            
+            return {
+                "status": "success",
+                "provider": "openrouter", 
+                "data": {
+                    "total": data.get("data", {}).get("total_credits", 0),
+                    "usage": data.get("data", {}).get("total_usage", 0)
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"Failed to fetch credits: {response.status_code}",
+                "data": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching OpenRouter credits: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "data": None
+        }
+

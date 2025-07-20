@@ -1747,14 +1747,32 @@
         
         async function loadSummaryData() {
             try {
-                const response = await fetch(`${baseUrl}/api/summary`);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                const data = await response.json();
+                // Fetch both summary and credits data in parallel
+                const [summaryResponse, creditsResponse] = await Promise.all([
+                    fetch(`${baseUrl}/api/summary`),
+                    fetch(`${baseUrl}/api/credits`)
+                ]);
                 
-                summaryData = data.data;
-                updateSummaryDisplay();
+                if (!summaryResponse.ok) {
+                    throw new Error(`Summary HTTP ${summaryResponse.status}: ${summaryResponse.statusText}`);
+                }
+                if (!creditsResponse.ok) {
+                    console.warn(`Credits fetch failed: ${creditsResponse.status}`);
+                }
+                
+                const summaryDataJson = await summaryResponse.json();
+                let creditsData = null;
+                
+                // Only parse credits if response is OK and contains data
+                if (creditsResponse.ok) {
+                    const creditsJson = await creditsResponse.json();
+                    if (creditsJson.status === 'success' && creditsJson.data) {
+                        creditsData = creditsJson.data;
+                    }
+                }
+                
+                summaryData = summaryDataJson.data;
+                updateSummaryDisplay(creditsData);
                 
             } catch (error) {
                 console.error('Failed to load summary data:', error);
@@ -1763,7 +1781,7 @@
             }
         }
         
-        function updateSummaryDisplay() {
+        function updateSummaryDisplay(creditsData = null) {
             if (!summaryData) return;
             
             const overview = document.getElementById('summaryOverview');
@@ -1771,6 +1789,29 @@
             
             // Update overview statistics
             const totals = summaryData.totals;
+            
+            let creditsCard = '';
+            if (creditsData && creditsData.total !== undefined) {
+                const usageAmount = creditsData.usage || 0;
+                const totalAmount = creditsData.total || 0;
+                const remaining = Math.max(0, totalAmount - usageAmount);
+                const usagePercent = totalAmount > 0 ? (usageAmount / totalAmount) * 100 : 0;
+                
+                creditsCard = `
+                    <div class="overview-card">
+                        <h3>Credits</h3>
+                        <div class="value">$${usageAmount.toFixed(2)}</div>
+                        <div class="label">used of $${totalAmount.toFixed(2)}</div>
+                        <div style="margin-top: 10px; background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div style="background: linear-gradient(90deg, #4facfe, #00f2fe); width: ${Math.min(100, usagePercent)}%; height: 100%; border-radius: 3px;"></div>
+                        </div>
+                        <div style="margin-top: 5px; font-size: 0.7em; color: #28a745;">
+                            $${remaining.toFixed(2)} remaining
+                        </div>
+                    </div>
+                `;
+            }
+            
             overview.innerHTML = `
                 <div class="overview-grid">
                     <div class="overview-card">
@@ -1798,6 +1839,7 @@
                         <div class="value">${totals.overall_success_rate}%</div>
                         <div class="label">${totals.total_completed} completed</div>
                     </div>
+                    ${creditsCard}
                 </div>
             `;
             
