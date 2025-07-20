@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse
+import starlette
+from starlette.requests import Request
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import uvicorn
 import sys
 import argparse
@@ -9,12 +14,17 @@ from dotenv import load_dotenv
 from src.core.config import config
 
 
+logger = logging.getLogger(__name__)
+class UnicornException(Exception):
+    def __init__(self, name: str):
+        self.name = name
+
 def main():
 
     # Disable various logging sources
     uvicorn_error = logging.getLogger("uvicorn.error")
     uvicorn_access = logging.getLogger("uvicorn.access")
-    uvicorn_access.disabled = True
+    uvicorn_access.disabled = False
     
     # Disable HTTP client logging that shows the POST requests
     http_loggers = [
@@ -117,6 +127,20 @@ def main():
 
     app.include_router(api_router)
 
+    # other http exception
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc):
+        print(f"====error on request {type(exc)}====\nurl={request.url}?{request.query_params}\nbody:\n{await request.body()}\nERROR{exc}")
+        return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
+
+
+    # request format error
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc):
+        # logger.error("error", exc , exc_info=True)
+        print(f"====error on request {type(exc)}====\nurl={request.url}?{request.query_params}\nbody:\n{await request.body()}\nERROR{exc}")
+        return PlainTextResponse(str(exc), status_code=400)
+
     # Start server
     uvicorn.run(
         app,
@@ -124,8 +148,10 @@ def main():
         port=config.port,
         log_level=log_level,
         reload=False,
-        access_log=False,
+        access_log=True,
     )
+
+
 
 
 if __name__ == "__main__":

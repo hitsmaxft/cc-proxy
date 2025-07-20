@@ -1,9 +1,12 @@
-from src.core.config import config
+from src.core.config import Config, config
 
 class ModelManager:
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self.config = config
         self.request_counters = {}
+
+    def enable_websearch(self):
+        return self.config.web_search
     
     def map_claude_model_to_openai(self, claude_model: str) -> str:
         """Map Claude model names to OpenAI model names based on BIG/SMALL pattern"""

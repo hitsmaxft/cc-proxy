@@ -2,15 +2,24 @@ import json
 from typing import Dict, Any, List
 from venv import logger
 from src.core.constants import Constants
-from src.models.claude import ClaudeMessagesRequest, ClaudeMessage
+from src.core.model_manager import ModelManager
+from src.models.claude import ClaudeMessagesRequest, ClaudeMessage, WebSearchTool
 from src.core.config import config
 import logging
 
 logger = logging.getLogger(__name__)
 
+def get_web_search(claude_request: ClaudeMessagesRequest):
+    if claude_request.tools:
+        for tool in claude_request.tools:
+            if tool.type == "web_search_20250305":
+                return True
+    return False
+        
+
 
 def convert_claude_to_openai(
-    claude_request: ClaudeMessagesRequest, model_manager
+    claude_request: ClaudeMessagesRequest, model_manager: ModelManager
 ) -> Dict[str, Any]:
     """Convert Claude API request format to OpenAI format."""
 
@@ -19,6 +28,13 @@ def convert_claude_to_openai(
 
     # Convert messages
     openai_messages = []
+
+    extra_query: Dict[str, Any] = []
+
+    if model_manager.enable_websearch() and get_web_search(claude_request):
+        # use plugin for search on claude
+        openai_model = f"{openai_model}:online"
+        extra_query["plugins"] = [{"id": "web" }]
 
     # Add system message if present
     if claude_request.system:
@@ -84,6 +100,11 @@ def convert_claude_to_openai(
         "temperature": claude_request.temperature,
         "stream": claude_request.stream,
     }
+
+    # add custom query for websearch or other custom feature
+    if extra_query:
+        openai_request["extra_query"] = extra_query
+
     logger.debug(
         f"Converted Claude request to OpenAI format: {json.dumps(openai_request, indent=2, ensure_ascii=False)}"
     )
@@ -97,6 +118,9 @@ def convert_claude_to_openai(
     if claude_request.tools:
         openai_tools = []
         for tool in claude_request.tools:
+            if tool.type == "web_search_20250305":
+                continue
+                    
             if tool.name and tool.name.strip():
                 openai_tools.append(
                     {

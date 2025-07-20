@@ -3,6 +3,8 @@ import sys
 
 # Configuration
 class Config:
+    web_search: bool = False
+
     def __init__(self):
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
         if not self.openai_api_key:
@@ -33,6 +35,8 @@ class Config:
         self.big_model = self.big_models[0]
         self.middle_model = self.middle_models[0]
         self.small_model = self.small_models[0]
+
+        self.web_search = os.environ.get("WEB_SEARCH")  # For Azure OpenAI
         
         
     def validate_api_key(self):

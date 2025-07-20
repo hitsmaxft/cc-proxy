@@ -419,3 +419,4 @@ async def get_usage_summary():
     except Exception as e:
         logger.error(f"Error retrieving usage summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
