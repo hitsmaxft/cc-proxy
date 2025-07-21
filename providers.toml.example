@@ -1,0 +1,43 @@
+[config]
+
+# Optional: Performance settings  
+max_tokens_limit="128000"
+# Minimum tokens limit for requests (to avoid errors with thinking model)
+min_tokens_limit="40000"
+request_timeout="90"
+max_retries="2"
+port=8086
+anthropic_api_key="123"
+log_level="INFO"
+db_file="proxy.db"
+host="127.0.0.1"
+
+
+# default model
+big_model="claude_opus4"
+middle_model="claude_sonnet4"
+small_model="claude35_haiku"
+
+
+
+[[provider]]
+
+name = "demo"
+base_url = "https://demo.ai/api/openai/v1"
+api_key="sk-xjbd"
+
+big_models=["claude_opus4","claude3_opus"]
+middle_models=["claude_sonnet4","claude37_sonnet"]
+small_models=["claude35_haiku","claude3_haiku"]
+
+
+
+[[provider]]
+
+name = "demo2"
+base_url = "https://demo.ai/api/openai/v1"
+api_key="sk-xjbd"
+
+big_models=[]
+middle_models=[]
+small_models=[]
