@@ -59,6 +59,7 @@ class ModelManager:
     
     def get_model_config(self, model: str, model_type:str):
 
+        # map big_model to big_models
         type_key = model_type +"s"
 
         for p in self.config.provider:

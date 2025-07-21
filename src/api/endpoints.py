@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, Header, Depends
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+        
+# Import aiohttp for making the request
+import requests
 from datetime import datetime
 import uuid
 from typing import Optional
@@ -425,22 +428,29 @@ async def get_usage_summary():
 async def get_openrouter_credits():
     """Get OpenRouter credits information"""
     try:
+        op = None
+
+        for p in config.provider:
+            if "openrouter.ai" in p["base_url"]:
+                op = p
+                break
         # Check if we're using OpenRouter
-        if "openrouter.ai" not in config.openai_base_url:
+        if not op:
             return {
                 "status": "not_openrouter",
                 "message": "Not using OpenRouter base URL",
                 "data": None
             }
         
-        # Import aiohttp for making the request
-        import requests
-        
+
+
+        openai_api_key = op["api_key"]
+        openai_base_url = op["base_url"]
+
         headers = {
-            "Authorization": f"Bearer {config.openai_api_key}",
+            "Authorization": f"Bearer {openai_api_key}",
             "Content-Type": "application/json"
         }
-        
 
         response = requests.get("https://openrouter.ai/api/v1/credits", headers=headers)
         if response.status_code == 200:

@@ -41,20 +41,27 @@ class Config:
     middle_models : List[str] = []
     small_models : List[str] = []
 
-    def load_toml(self):
+    def init_toml(self):
         for (k, v) in self.config.items():
             print(f"set config.{k}={v}")
             if k in ["port", "request_timeout", "min_tokens_limit", "max_tokens_limit"]:
                 setattr(self, k, int(v))
             else:
                 setattr(self, k, v)
-        self.provider_names = [ x["name"] for x in self.provider]
+        self.load_providers(self.provider)
 
-        for provider in self.provider:
+    def load_providers(self, provider: List[Dict[str, Any]]):
+        self.provider_names = [ x["name"] for x in provider]
+        self.provider = provider
+
+        for provider in provider:
             print(f"add provider {provider["name"]}")
             for m in ["big_models", "middle_models", "small_models"]:
                 if m in provider:
                     getattr(self, m).extend(provider[m])
+        print("big_models:", self.big_models)
+        print("middle_models:", self.middle_models)
+        print("small_models:", self.small_models)
 
 
     def load_env(self):
@@ -74,6 +81,7 @@ class Config:
         self.log_level = os.environ.get("LOG_LEVEL", "INFO")
         self.max_tokens_limit = int(os.environ.get("MAX_TOKENS_LIMIT", "4096"))
         self.min_tokens_limit = int(os.environ.get("MIN_TOKENS_LIMIT", "100"))
+        self.db_file = os.environ.get("DB_FILE", "cc.db")
 
         # Connection settings
         self.request_timeout = int(os.environ.get("REQUEST_TIMEOUT", "90"))
@@ -85,12 +93,25 @@ class Config:
         self.middle_models = [m.strip() for m in os.environ.get("MIDDLE_MODELS",os.environ.get("MIDDLE_MODEL", self.big_models)).split(",")]
         self.small_models = [m.strip() for m in os.environ.get("SMALL_MODELS",os.environ.get("SMALL_MODEL", "gpt-4o-mini")).split(",")]
 
+
         self.big_model = self.big_models[0]
         self.middle_model = self.middle_models[0]
         self.small_model = self.small_models[0]
         self.model_provders = {}
 
         self.web_search = os.environ.get("WEB_SEARCH")  # For Azure OpenAI
+
+        self.load_providers(
+            [ModelProvider(
+            name="default",
+            base_url=self.openai_base_url,
+            api_key=self.openai_api_key,
+            big_models=self.big_models,
+            middle_models=self.middle_models,
+            small_models= self.small_models,
+        )]
+
+        )
 
     def validate_api_key(self):
         """Basic API key validation"""
@@ -126,7 +147,7 @@ def init_config(config_file:Optional[str] = None):
                 setattr(config, key, value)
             for (k, v) in data.get("config", {}).items():
                 os.environ[k] = "v"
-            config.load_toml()
+            config.init_toml()
             print(f" Configuration loaded: providers={config.provider_names}")
                 
     else:
