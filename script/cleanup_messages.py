@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Database path - same as used in the application
-DB_PATH = "message_history.db"
+DB_PATH = "proxy.db"
 
 async def cleanup_incomplete_messages():
     """Update all incomplete messages to completed status"""

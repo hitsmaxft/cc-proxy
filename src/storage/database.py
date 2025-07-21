@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -318,4 +319,4 @@ class MessageHistoryDatabase:
             return []
 
 # Global database instance
-message_db = MessageHistoryDatabase()
+message_db = MessageHistoryDatabase(os.environ.get("DB_FILE"))

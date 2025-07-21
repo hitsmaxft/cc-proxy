@@ -59,6 +59,7 @@ def convert_openai_to_claude_response(
         "function_call": Constants.STOP_TOOL_USE,
     }.get(finish_reason, Constants.STOP_END_TURN)
 
+
     # Build Claude response
     claude_response = {
         "id": openai_response.get("id", f"msg_{uuid.uuid4()}"),
