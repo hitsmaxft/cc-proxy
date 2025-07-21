@@ -29,13 +29,13 @@ class MessageHistoryDatabase:
                     CREATE TABLE IF NOT EXISTS message_history (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         request_id TEXT UNIQUE NOT NULL,
-                        timestamp DATETIME NOT NULL,
+                        timeetamp DATETIME NOT NULL,
                         model_name TEXT NOT NULL,
                         request_data TEXT NOT NULL,
                         response_data TEXT,
                         user_agent TEXT,
                         is_streaming BOOLEAN NOT NULL DEFAULT 0,
-                        request_length INTEGER,
+                        request_length dNTEGER,
                         response_length INTEGER,
                         status TEXT DEFAULT 'pending'
                     )
@@ -317,6 +317,3 @@ class MessageHistoryDatabase:
         except Exception as e:
             logger.error(f"Failed to get token usage summary: {e}")
             return []
-
-# Global database instance
-message_db = MessageHistoryDatabase(os.environ.get("DB_FILE"))

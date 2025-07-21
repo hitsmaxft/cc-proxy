@@ -11,7 +11,7 @@ import argparse
 import os
 import logging
 from dotenv import load_dotenv
-from src.core.config import config
+from src.core.config import config, Config
 
 
 logger = logging.getLogger(__name__)
@@ -41,25 +41,33 @@ def main():
         logging.getLogger(logger_name).disabled = True
 
     parser = argparse.ArgumentParser(description="Claude-to-OpenAI API Proxy v1.0.0")
-    parser.add_argument("--env", help="Path to .env file", default=".env")
+    parser.add_argument("--env", help="Path to .env file", default=".env", type=str)
+    parser.add_argument("--conf", help="Path to config toml file", type=str)
     parser.add_argument("--log", help="enable access_log", default=False)
     args = parser.parse_args()
     
-    # Load environment variables from specified file
-    if os.path.exists(args.env):
-        load_dotenv(args.env)
-        print(f"✅ Loaded environment from: {args.env}")
-        if not "DB_FILE" in os.environ:
-            os.environ["DB_FILE"] = os.path.splitext(os.path.basename(args.env))[0] + ".db"
-    elif args.env != ".env":
-        print(f"⚠️ Warning: Specified env file not found: {args.env}")
-        os.environ["DB_FILE"] = "proxy.db"
-    print(f"✅ Loaded db from: {os.environ["DB_FILE"]}")
-    
-    # Reinitialize config after loading env
+
     from src.core.config import init_config
     global config
-    config = init_config()
+    # Load environment variables from specified file
+    if  not args.conf:
+        if os.path.exists(args.env):
+            default_provider = os.path.splitext(os.path.basename(args.env))[0]
+            load_dotenv(args.env)
+            print(f"✅ Loaded environment from: {args.env}")
+            if not "DB_FILE" in os.environ:
+                os.environ["DB_FILE"] = f"{default_provider}.db"
+        elif args.env != ".env":
+            print(f"⚠️ Warning: Specified env file not found: {args.env}")
+            os.environ["DB_FILE"] = "proxy.db"
+        print(f"✅ Loaded db from: {os.environ["DB_FILE"]}")
+        # Reinitialize config after loading env
+        config = init_config()
+    else:
+        print(f"✅ Loaded toml config from: {args.conf}")
+        config = init_config(config_file= args.conf)
+        
+    
     
     # Keep the old help logic for backward compatibility
     if "--help" in sys.argv:
@@ -97,7 +105,6 @@ def main():
     # Configuration summary
     print("🚀 Claude-to-OpenAI API Proxy v1.0.0")
     print(f"✅ Configuration loaded successfully")
-    print(f"   OpenAI Base URL: {config.openai_base_url}")
     print(f"   Big Model (opus): {config.big_model}")
     print(f"   Middle Model (sonnet): {config.middle_model}")
     print(f"   Small Model (haiku): {config.small_model}")

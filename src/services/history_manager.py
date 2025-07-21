@@ -1,15 +1,20 @@
+import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import asyncio
 
-from src.storage.database import message_db
+from src.storage.database import MessageHistoryDatabase
 from src.models.history import MessageHistoryItem, MessageHistoryResponse, MessageHistorySummary
 from src.core.logging import logger
+from src.core.config import config
 
 class HistoryManager:
     """Service class for managing message history operations"""
     
     def __init__(self):
+        # Global database instance
+        print(f"load db from {config.db_file}")
+        message_db = MessageHistoryDatabase(config.db_file)
         self.database = message_db
     
     async def log_request(

@@ -2,7 +2,7 @@ import json
 from typing import Dict, Any, List
 from venv import logger
 from src.core.constants import Constants
-from src.core.model_manager import ModelManager
+from src.core.model_manager import ModelConfig, ModelManager
 from src.models.claude import ClaudeMessagesRequest, ClaudeMessage, WebSearchTool
 from src.core.config import config
 import logging
@@ -24,7 +24,7 @@ def convert_claude_to_openai(
     """Convert Claude API request format to OpenAI format."""
 
     # Map model
-    openai_model = model_manager.map_claude_model_to_openai(claude_request.model)
+    openai_model:ModelConfig = model_manager.map_claude_model_to_openai(claude_request.model)
 
     # Convert messages
     openai_messages = []
@@ -33,7 +33,7 @@ def convert_claude_to_openai(
 
     if model_manager.enable_websearch() and get_web_search(claude_request):
         # use plugin for search on claude
-        openai_model = f"{openai_model}:online"
+        openai_model.model = f"{openai_model.model}:online"
         extra_query["plugins"] = [{"id": "web" }]
 
     # Add system message if present
@@ -91,7 +91,6 @@ def convert_claude_to_openai(
 
     # Build OpenAI request
     openai_request = {
-        "model": openai_model,
         "messages": openai_messages,
         "max_tokens": min(
             max(claude_request.max_tokens, config.min_tokens_limit),
@@ -99,6 +98,7 @@ def convert_claude_to_openai(
         ),
         "temperature": claude_request.temperature,
         "stream": claude_request.stream,
+        ** openai_model,
     }
 
     # add custom query for websearch or other custom feature

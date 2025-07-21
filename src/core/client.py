@@ -1,18 +1,32 @@
 import asyncio
 import json
+import logging
 from fastapi import HTTPException
 from typing import Optional, AsyncGenerator, Dict, Any
 from openai import AsyncOpenAI, AsyncAzureOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai._exceptions import APIError, RateLimitError, AuthenticationError, BadRequestError
 
+logger = logging.getLogger(__name__)
+
 class OpenAIClient:
+
+    # cached client,  api_key -> client
+    clients : Dict[str, AsyncOpenAI] = {}
+    api_version : Optional[str] = None
+    timeout: int
+
     """Async OpenAI client with cancellation support."""
     
     def __init__(self, api_key: str, base_url: str, timeout: int = 90, api_version: Optional[str] = None):
+        self.active_requests: Dict[str, asyncio.Event] = {}
+
+        self.timeout = timeout
+        if not api_key:
+            return
+        
         self.api_key = api_key
         self.base_url = base_url
-        
         # Detect if using Azure and instantiate the appropriate client
         if api_version:
             self.client = AsyncAzureOpenAI(
@@ -21,6 +35,7 @@ class OpenAIClient:
                 api_version=api_version,
                 timeout=timeout
             )
+            self.api_version = api_version
         else:
             self.client = AsyncOpenAI(
                 api_key=api_key,
@@ -28,6 +43,37 @@ class OpenAIClient:
                 timeout=timeout
             )
         self.active_requests: Dict[str, asyncio.Event] = {}
+
+    def get_client(self, request: Dict[str, Any]) -> AsyncOpenAI:
+        api_key = request.get("api_key", None)
+        base_url = request.get("base_url", None)
+
+        if not api_key:
+            return self.client
+
+        if api_key in self.clients:
+            return self.clients[api_key]
+
+        if self.api_version:
+            client = AsyncAzureOpenAI(
+                api_key=api_key,
+                azure_endpoint=base_url,
+                api_version=self.api_version,
+                # In the provided code, there is a variable named `timeout` that is used in the
+                # `__init__` method of the `OpenAIClient` class. This `timeout` variable is an integer
+                # value representing the maximum time in seconds that a request can take before it
+                # times out.
+                timeout=self.timeout
+            )
+        else:
+            client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=self.timeout
+            )
+
+        self.clients[api_key] = client
+        return client
     
     async def create_chat_completion(self, request: Dict[str, Any], request_id: Optional[str] = None) -> Dict[str, Any]:
         """Send chat completion to OpenAI API with cancellation support."""
@@ -38,9 +84,13 @@ class OpenAIClient:
             self.active_requests[request_id] = cancel_event
         
         try:
+            client = self.get_client(request)
+
+            del request["base_url"]
+            del request["api_key"]
             # Create task that can be cancelled
             completion_task = asyncio.create_task(
-                self.client.chat.completions.create(**request)
+                client.chat.completions.create(**request)
             )
             
             if request_id:
@@ -97,6 +147,12 @@ class OpenAIClient:
             self.active_requests[request_id] = cancel_event
         
         try:
+
+            client = self.get_client(request)
+
+            del request["base_url"]
+            del request["api_key"]
+            
             # Ensure stream is enabled
             request["stream"] = True
             if "stream_options" not in request:
@@ -104,7 +160,7 @@ class OpenAIClient:
             request["stream_options"]["include_usage"] = True
 
             # Create the streaming completion
-            streaming_completion = await self.client.chat.completions.create(**request)
+            streaming_completion = await client.chat.completions.create(**request)
             
             async for chunk in streaming_completion:
                 # Check for cancellation before yielding each chunk
@@ -130,6 +186,8 @@ class OpenAIClient:
             status_code = getattr(e, 'status_code', 500)
             raise HTTPException(status_code=status_code, detail=self.classify_openai_error(str(e)))
         except Exception as e:
+            logger.error("common error", e, exc_info=True)
+
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
         
         finally:
