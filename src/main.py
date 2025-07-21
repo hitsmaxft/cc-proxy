@@ -66,6 +66,15 @@ def main():
     else:
         print(f"✅ Loaded toml config from: {args.conf}")
         config = init_config(config_file= args.conf)
+    
+    # Load model configuration from database
+    import asyncio
+    try:
+        # Run async database loading function
+        asyncio.run(config.load_model_config_from_db(os.environ.get("DB_FILE", "proxy.db")))
+    except Exception as e:
+        print(f"⚠️  Warning: Could not load model configuration from database: {e}")
+    
         
     
     

@@ -87,6 +87,23 @@ class MessageHistoryDatabase:
                     ON message_history(timestamp DESC)
                 """)
                 
+                
+                # Create model configuration table
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS model_configuration (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        key TEXT UNIQUE NOT NULL,
+                        value TEXT NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                """)
+                
+                # Create index for model configuration key lookup
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_model_config_key 
+                    ON model_configuration(key)
+                """)
+                
                 await db.commit()
                 logger.info(f"Message history database initialized at {self.db_path}")
                 self._initialized = True
@@ -317,3 +334,60 @@ class MessageHistoryDatabase:
         except Exception as e:
             logger.error(f"Failed to get token usage summary: {e}")
             return []
+
+    async def save_model_config(self, big_model: str, middle_model: str, small_model: str) -> bool:
+        """Save model configuration to database"""
+        await self.initialize()
+        
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                current_time = datetime.now().isoformat()
+                
+                # Insert or replace model configurations
+                models = {
+                    'BIG_MODEL': big_model,
+                    'MIDDLE_MODEL': middle_model,
+                    'SMALL_MODEL': small_model
+                }
+                
+                for key, value in models.items():
+                    await db.execute("""
+                        INSERT OR REPLACE INTO model_configuration (key, value, updated_at)
+                        VALUES (?, ?, ?)
+                    """, (key, value, current_time))
+                
+                await db.commit()
+                logger.info(f"Model configuration saved: BIG={big_model}, MIDDLE={middle_model}, SMALL={small_model}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to save model configuration: {e}")
+            return False
+
+    async def load_model_config(self) -> Dict[str, str]:
+        """Load model configuration from database"""
+        await self.initialize()
+        
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute("""
+                    SELECT key, value FROM model_configuration 
+                    WHERE key IN ('BIG_MODEL', 'MIDDLE_MODEL', 'SMALL_MODEL')
+                """) as cursor:
+                    rows = await cursor.fetchall()
+                    
+                    config = {}
+                    for row in rows:
+                        config[row['key']] = row['value']
+                    
+                    if config:
+                        logger.info(f"Loaded model configuration from database: {config}")
+                    else:
+                        logger.info("No saved model configuration found in database")
+                    
+                    return config
+                    
+        except Exception as e:
+            logger.error(f"Failed to load model configuration: {e}")
+            return {}

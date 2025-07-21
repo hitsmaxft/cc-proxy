@@ -21,8 +21,12 @@ from src.conversion.response_converter import (
 from src.core.model_manager import model_manager
 from src.services.history_manager import history_manager
 from src.utils.token_counter import extract_token_usage, estimate_input_tokens_from_request
+from src.storage.database import MessageHistoryDatabase
 
 router = APIRouter()
+
+# Initialize database
+config_db = MessageHistoryDatabase()
 
 # Setup Jinja2 templates
 templates = Jinja2Templates(directory="src/assets")
@@ -349,10 +353,17 @@ async def update_config(request: ConfigUpdateRequest):
         if request.SMALL_MODEL is not None:
             config.small_model = request.SMALL_MODEL
         
+        # Save to database
+        await config_db.save_model_config(
+            config.big_model,
+            config.middle_model,
+            config.small_model
+        )
+        
         # Return updated configuration
         return {
             "status": "success",
-            "message": "Configuration updated successfully",
+            "message": "Configuration updated successfully and saved to database",
             "current": {
                 "BIG_MODEL": config.big_model,
                 "MIDDLE_MODEL": config.middle_model,
