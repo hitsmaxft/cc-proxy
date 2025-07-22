@@ -4,6 +4,7 @@ from fastapi import HTTPException, Request
 from src.core.constants import Constants
 from src.models.claude import ClaudeMessagesRequest
 from src.services.history_manager import history_manager
+from src.utils.response_formatter import format_response_output
 
 
 def convert_openai_to_claude_response(
@@ -75,7 +76,9 @@ def convert_openai_to_claude_response(
         },
     }
 
+    # Format the response with message type and stop reason indicators
     return claude_response
+    # return format_response_output(claude_response)
 
 
 async def convert_openai_streaming_to_claude(

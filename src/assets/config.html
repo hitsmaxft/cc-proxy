@@ -543,6 +543,11 @@
             letter-spacing: 0.5px;
         }
         
+        .stop-reason-title {
+            background: rgba(167, 49, 40, 0.1);
+            color: #a77228;
+            border: 1px solid rgba(167, 68, 40, 0.2);
+        }
         .stop-reason-end-turn {
             background: rgba(40, 167, 69, 0.1);
             color: #28a745;
@@ -1397,7 +1402,7 @@
                             hasStatusUpdates = true;
                             
                             // Update the specific message element in the DOM
-                            updateMessageStatus(i, updatedMsg);
+                            updateMessageStatus(i, updatedMsg); // i is passed but not used in the function
                         }
                     }
                 }
@@ -1465,8 +1470,8 @@
                 const expandedClass = isExpanded ? ' expanded' : '';
                 
                 htmlContent += `
-                    <div class="message-item">
-                        <div class="message-click-box" style="width: 40em;" onclick="toggleMessageContent(${index})">
+                    <div class="message-item" data-index="${index}" data-message-id="${message.id}">
+                        <div class="message-click-box" style="width: 40em;" onclick="toggleMessageContent('${message.id}')">
                             <div class="message-header">
                                 <span class="message-model">${message.model_name} → ${message.actual_model} ${statusBadge}${stopReasonBadge}</span>
                                 <span class="message-time">${timestamp}</span>
@@ -1483,12 +1488,12 @@
                                 }
                             </div>
                         </div>
-                        <div id="message-content-${index}" class="message-content${expandedClass}">
+                        <div id="message-content-${message.id}" class="message-content${expandedClass}">
                             <div class="json-toggle">
-                                <button onclick="showJsonContent(${index}, 'request', event);" class="active">Request</button>
-                                <button onclick="showJsonContent(${index}, 'response', event);">Response</button>
+                                <button onclick="showJsonContent('${message.id}', 'request', event);" class="active">Request</button>
+                                <button onclick="showJsonContent('${message.id}', 'response', event);">Response</button>
                             </div>
-                            <div id="json-content-${index}" class="json-viewer"></div>
+                            <div id="json-content-${message.id}" class="json-viewer"></div>
                         </div>
                     </div>
                 `;
@@ -1500,15 +1505,17 @@
             restoreExpandedMessageStates();
         }
         
-        function toggleMessageContent(index) {
-            const message = messageHistory[index];
-            const messageId = message.id;
-            const contentEl = document.getElementById(`message-content-${index}`);
+        function toggleMessageContent(messageId) {
+            // Find the message in the history by its ID
+            const message = messageHistory.find(m => m.id.toString() === messageId.toString());
+            if (!message) return;
+            
+            const contentEl = document.getElementById(`message-content-${messageId}`);
             const isExpanded = contentEl && contentEl.classList.contains('expanded');
             
             if (isExpanded) {
                 // Close this message
-                expandedMessageIds.delete(messageId);
+                expandedMessageIds.delete(parseInt(messageId));
                 currentlyViewingContent = null;
                 if (contentEl) {
                     contentEl.classList.remove('expanded');
@@ -1521,20 +1528,22 @@
                 });
                 
                 // Open this message
-                expandedMessageIds.add(messageId);
+                expandedMessageIds.add(parseInt(messageId));
                 currentlyViewingContent = { messageId, contentType: 'request' };
                 if (contentEl) {
                     contentEl.classList.add('expanded');
-                    showJsonContent(index, 'request');
+                    showJsonContent(messageId, 'request');
                 }
             }
         }
         
-        function showJsonContent(index, type, event) {
-            const message = messageHistory[index];
-            const messageId = message.id;
-            const jsonContentEl = document.getElementById(`json-content-${index}`);
-            const buttons = document.querySelectorAll(`#message-content-${index} .json-toggle button`);
+        function showJsonContent(messageId, type, event) {
+            // Find the message in the history by its ID
+            const message = messageHistory.find(m => m.id.toString() === messageId.toString());
+            if (!message) return;
+            
+            const jsonContentEl = document.getElementById(`json-content-${messageId}`);
+            const buttons = document.querySelectorAll(`#message-content-${messageId} .json-toggle button`);
             
             // Update active button
             buttons.forEach(btn => btn.classList.remove('active'));
@@ -1558,7 +1567,7 @@
             // Show the requested content
             const content = type === 'request' ? message.request_data : message.response_data;
             if (jsonContentEl) {
-                jsonContentEl.textContent = JSON.stringify(content, null, 2);
+                jsonContentEl.textContent = JSON.stringify(content, null, 2); 
             }
         }
         
@@ -1587,8 +1596,8 @@
                 const messageTypeInfo = getMessageTypeInfo(message);
                 
                 newHtml += `
-                    <div class="message-item">
-                        <div class="message-click-box" style="width: 40em;" onclick="toggleMessageContent(${index})">
+                    <div class="message-item" data-index="${index}" data-message-id="${message.id}">
+                        <div class="message-click-box" style="width: 40em;" onclick="toggleMessageContent('${message.id}')">
                         <div class="message-header">
                             <span class="message-model">${message.model_name} → ${message.actual_model} ${statusBadge}${stopReasonBadge}</span>
                             <span class="message-time">${timestamp}</span>
@@ -1605,12 +1614,12 @@
                             }
                         </div>
                         </div>
-                        <div id="message-content-${index}" class="message-content">
+                        <div id="message-content-${message.id}" class="message-content">
                             <div class="json-toggle">
-                                <button onclick="showJsonContent(${index}, 'request', event);" class="active">Request</button>
-                                <button onclick="showJsonContent(${index}, 'response', event);">Response</button>
+                                <button onclick="showJsonContent('${message.id}', 'request', event);" class="active">Request</button>
+                                <button onclick="showJsonContent('${message.id}', 'response', event);">Response</button>
                             </div>
-                            <div id="json-content-${index}" class="json-viewer"></div>
+                            <div id="json-content-${message.id}" class="json-viewer"></div>
                         </div>
                     </div>
                 `;
@@ -1634,11 +1643,11 @@
         }
         
         function updateMessageStatus(index, updatedMessage) {
-            // Find the message element and update its content
-            const messageElements = document.querySelectorAll('.message-item');
-            if (messageElements[index]) {
-                const messageElement = messageElements[index];
-                
+            // Find the message element by message ID
+            const messageId = updatedMessage.id;
+            const messageElement = document.querySelector(`.message-item[data-message-id="${messageId}"]`);
+            
+            if (messageElement) {
                 // Update status badge and stop reason badge
                 const modelSpan = messageElement.querySelector('.message-model');
                 if (modelSpan) {
@@ -1682,6 +1691,16 @@
             }
         }
         
+        function getTitle(message) {
+            const content = message.response_data?.content;
+            if (content && content.includes("isNewTopic")) {
+                const contentObj = JSON.parse(content);
+                if (contentObj && contentObj["title"]) {
+                    return contentObj["title"]
+                }
+            }
+            return null;
+        }
         function getStopReasonBadge(message) {
             // Get stop reason from response data
             const stopReason = message.response_data?.stop_reason;
@@ -1689,12 +1708,19 @@
             
             const badgeConfig = {
                 'end_turn': { icon: '🎯', label: 'Normal', class: 'stop-reason-end-turn' },
+                'title': { icon: '', label: 'Title', class: 'stop-reason-end-turn' },
                 'max_tokens': { icon: '📏', label: 'Max Tokens', class: 'stop-reason-max-tokens' },
                 'tool_use': { icon: '🔧', label: 'Tool Use', class: 'stop-reason-tool-use' },
                 'error': { icon: '❌', label: 'Error', class: 'stop-reason-error' }
             };
+
+            let config = badgeConfig[stopReason] || { icon: '❓', label: 'Unknown', class: 'stop-reason-error' };
+            const title = getTitle(message)
+            if (title) {
+                config = { icon: '🎯', label: 'New Topic', class: 'stop-reason-title' };
+            }
             
-            const config = badgeConfig[stopReason] || { icon: '❓', label: 'Unknown', class: 'stop-reason-error' };
+            
             
             return `<span class="stop-reason-badge ${config.class}" title="Stop reason: ${config.label}">
                 ${config.icon} ${config.label}
@@ -1714,10 +1740,38 @@
             
             const description = typeDescriptions[stopReason] || 'Unknown completion type';
             
+            // Extract tool name when stop_reason is tool_use
+            let toolInfo = '';
+            if (stopReason === 'tool_use' && message.response_data?.tool_calls) {
+                const toolCalls = message.response_data.tool_calls;
+                const firstToolKey = Object.keys(toolCalls)[0];
+                
+                if (firstToolKey && toolCalls[firstToolKey]?.name) {
+                    const toolName = toolCalls[firstToolKey].name;
+                    toolInfo = `<div class="message-type-indicator" style="margin-top: 4px;">
+                        <span>Tool:</span>
+                        <span style="font-weight: 500; color: #4facfe;">${toolName}</span>
+                    </div>`;
+                }
+            } else if (stopReason === 'end_turn' && message.response_data?.tool_calls) {
+                const content = message.response_data.content;
+
+                if (content && content.includes("isNewTopic")) {
+                    const contentObj = JSON.parse(content);
+                    if (contentObj && contentObj["title"]) {
+                        toolInfo = `<div class="message-type-indicator" style="margin-top: 4px;">
+                            <span>Title:</span>
+                            <span style="font-weight: 500; color: #FFA500;">${contentObj['title']}</span>
+                        </div>`;
+                    }
+                }
+                
+            }
+            
             return `<div class="message-type-indicator">
                 <span>Type:</span>
                 <span>${description}</span>
-            </div>`;
+            </div>${toolInfo}`;
         }
         
         function showNewMessageNotification(count) {
@@ -1918,18 +1972,18 @@
             // Restore expanded states and content after DOM rebuild
             if (expandedMessageIds.size === 0) return;
             
-            messageHistory.forEach((message, index) => {
+            messageHistory.forEach((message) => {
                 if (expandedMessageIds.has(message.id)) {
-                    const contentEl = document.getElementById(`message-content-${index}`);
+                    const contentEl = document.getElementById(`message-content-${message.id}`);
                     if (contentEl && !contentEl.classList.contains('expanded')) {
                         contentEl.classList.add('expanded');
                         
                         // Restore the correct content tab and JSON data
                         if (currentlyViewingContent && currentlyViewingContent.messageId === message.id) {
                             const contentType = currentlyViewingContent.contentType || 'request';
-                            showJsonContent(index, contentType);
+                            showJsonContent(message.id, contentType);
                         } else {
-                            showJsonContent(index, 'request');
+                            showJsonContent(message.id, 'request');
                         }
                     }
                 }
@@ -1937,56 +1991,54 @@
         }
         
         function updateExistingMessages() {
-            // Smart update for existing messages without full DOM rebuild
-            const messageItems = document.querySelectorAll('.message-item');
-            
-            messageItems.forEach((messageElement, index) => {
-                if (index < messageHistory.length) {
-                    const message = messageHistory[index];
+            // Update each message in the message history
+            messageHistory.forEach(message => {
+                // Find the message element by message ID
+                const messageElement = document.querySelector(`.message-item[data-message-id="${message.id}"]`);
+                if (!messageElement) return;
+                
+                // Update status badge and stop reason badge
+                const modelSpan = messageElement.querySelector('.message-model');
+                if (modelSpan) {
+                    const statusBadge = message.status === 'completed' ? 
+                        '<span style="color: #28a745;">✓</span>' : 
+                        message.status === 'partial' ?
+                        '<span style="color: #ffc107;">⚠</span>' :
+                        '<span style="color: #ffc107;">⏳</span>';
                     
-                    // Update status badge and stop reason badge
-                    const modelSpan = messageElement.querySelector('.message-model');
-                    if (modelSpan) {
-                        const statusBadge = message.status === 'completed' ? 
-                            '<span style="color: #28a745;">✓</span>' : 
-                            message.status === 'partial' ?
-                            '<span style="color: #ffc107;">⚠</span>' :
-                            '<span style="color: #ffc107;">⏳</span>';
-                        
-                        const stopReasonBadge = getStopReasonBadge(message);
-                        modelSpan.innerHTML = `${message.model_name} → ${message.actual_model} ${statusBadge}${stopReasonBadge}`;
-                    }
+                    const stopReasonBadge = getStopReasonBadge(message);
+                    modelSpan.innerHTML = `${message.model_name} → ${message.actual_model} ${statusBadge}${stopReasonBadge}`;
+                }
+                
+                // Update message details
+                const detailsDiv = messageElement.querySelector('.message-details');
+                if (detailsDiv) {
+                    const requestLength = message.request_length || 0;
+                    const responseLength = message.response_length || 0;
+                    const messageTypeInfo = getMessageTypeInfo(message);
                     
-                    // Update message details
-                    const detailsDiv = messageElement.querySelector('.message-details');
-                    if (detailsDiv) {
-                        const requestLength = message.request_length || 0;
-                        const responseLength = message.response_length || 0;
-                        const messageTypeInfo = getMessageTypeInfo(message);
-                        
-                        detailsDiv.innerHTML = `
-                            Request: ${requestLength} chars | Response: ${responseLength} chars
-                            ${message.is_streaming ? ' | Streaming' : ''}
-                            ${messageTypeInfo}
-                        `;
-                    }
-                    
-                    // Update token information
-                    const tokensDiv = messageElement.querySelector('.message-tokens');
-                    if (tokensDiv) {
-                        tokensDiv.innerHTML = message.total_tokens > 0 ? 
-                            `<span class="token-info">📊 Input: ${message.input_tokens} | Output: ${message.output_tokens} | Total: ${message.total_tokens}</span>` : 
-                            '<span class="token-info-empty">📊 Token usage not available</span>';
-                    }
-                    
-                    // Update JSON content if this message is currently expanded
-                    if (expandedMessageIds.has(message.id) && currentlyViewingContent && currentlyViewingContent.messageId === message.id) {
-                        const jsonContentEl = messageElement.querySelector(`#json-content-${index}`);
-                        if (jsonContentEl) {
-                            const contentType = currentlyViewingContent.contentType || 'request';
-                            const content = contentType === 'request' ? message.request_data : message.response_data;
-                            jsonContentEl.textContent = JSON.stringify(content, null, 2);
-                        }
+                    detailsDiv.innerHTML = `
+                        Request: ${requestLength} chars | Response: ${responseLength} chars
+                        ${message.is_streaming ? ' | Streaming' : ''}
+                        ${messageTypeInfo}
+                    `;
+                }
+                
+                // Update token information
+                const tokensDiv = messageElement.querySelector('.message-tokens');
+                if (tokensDiv) {
+                    tokensDiv.innerHTML = message.total_tokens > 0 ? 
+                        `<span class="token-info">📊 Input: ${message.input_tokens} | Output: ${message.output_tokens} | Total: ${message.total_tokens}</span>` : 
+                        '<span class="token-info-empty">📊 Token usage not available</span>';
+                }
+                
+                // Update JSON content if this message is currently expanded
+                if (expandedMessageIds.has(message.id) && currentlyViewingContent && currentlyViewingContent.messageId === message.id) {
+                    const jsonContentEl = document.getElementById(`json-content-${message.id}`);
+                    if (jsonContentEl) {
+                        const contentType = currentlyViewingContent.contentType || 'request';
+                        const content = contentType === 'request' ? message.request_data : message.response_data;
+                        jsonContentEl.textContent = JSON.stringify(content, null, 2);
                     }
                 }
             });
