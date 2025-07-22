@@ -85,10 +85,10 @@ class HistoryManager:
             logger.error(f"Error logging response for {request_id}: {e}")
             return False
     
-    async def get_recent_messages(self, limit: int = 5) -> MessageHistoryResponse:
-        """Get recent messages with full details"""
+    async def get_recent_messages(self, limit: int = 5, start_date: Optional[str] = None, end_date: Optional[str] = None) -> MessageHistoryResponse:
+        """Get recent messages with full details, optionally filtered by date range"""
         try:
-            raw_messages = await self.database.get_recent_messages(limit)
+            raw_messages = await self.database.get_recent_messages(limit, start_date, end_date)
             
             # Convert to Pydantic models
             messages = [
@@ -216,10 +216,10 @@ class HistoryManager:
         
         return cleaned
     
-    async def get_token_usage_summary(self) -> Dict[str, Any]:
-        """Get aggregated token usage summary"""
+    async def get_token_usage_summary(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
+        """Get aggregated token usage summary with optional date range filtering"""
         try:
-            summary_data = await self.database.get_token_usage_summary()
+            summary_data = await self.database.get_token_usage_summary(start_date, end_date)
             
             # Calculate overall totals
             total_requests = sum(item['request_count'] for item in summary_data)
@@ -238,7 +238,11 @@ class HistoryManager:
                     'total_completed': total_completed,
                     'overall_success_rate': round(total_completed / max(total_requests, 1) * 100, 2) if total_requests > 0 else 0
                 },
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'date_range': {
+                    'start_date': start_date,
+                    'end_date': end_date
+                }
             }
             
         except Exception as e:
@@ -253,7 +257,11 @@ class HistoryManager:
                     'total_completed': 0,
                     'overall_success_rate': 0
                 },
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'date_range': {
+                    'start_date': start_date,
+                    'end_date': end_date
+                }
             }
 
 # Global history manager instance

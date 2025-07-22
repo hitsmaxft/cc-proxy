@@ -986,6 +986,32 @@
                 <h2 class="panel-title">📈 Usage Summary</h2>
                 
                 <div id="summaryContent" style="display: none;">
+                    <!-- Date Range Filter -->
+                    <div class="date-filter" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                        <h3 style="margin-bottom: 15px; font-size: 1.1em; color: #495057;">Filter by Date</h3>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <div class="input-group">
+                                <label for="startDate">Start Date:</label>
+                                <input type="date" id="startDate" class="date-input">
+                            </div>
+                            <div class="input-group">
+                                <label for="endDate">End Date:</label>
+                                <input type="date" id="endDate" class="date-input">
+                            </div>
+                            <button class="btn btn-primary" onclick="applyDateFilter()">Apply Filter</button>
+                            <button class="btn btn-secondary" onclick="clearDateFilter()">Clear</button>
+                        </div>
+                        <div class="quick-filters" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn" style="font-size: 0.9em; padding: 5px 10px;" onclick="setDateRange('today')">Today</button>
+                            <button class="btn" style="font-size: 0.9em; padding: 5px 10px;" onclick="setDateRange('yesterday')">Yesterday</button>
+                            <button class="btn" style="font-size: 0.9em; padding: 5px 10px;" onclick="setDateRange('last7')">Last 7 Days</button>
+                            <button class="btn" style="font-size: 0.9em; padding: 5px 10px;" onclick="setDateRange('last30')">Last 30 Days</button>
+                            <button class="btn" style="font-size: 0.9em; padding: 5px 10px;" onclick="setDateRange('thisMonth')">This Month</button>
+                            <button class="btn" style="font-size: 0.9em; padding: 5px 10px;" onclick="setDateRange('lastMonth')">Last Month</button>
+                        </div>
+                        <div id="current-filter" style="margin-top: 10px; font-size: 0.9em; color: #6c757d;"></div>
+                    </div>
+                    
                     <!-- Overall Statistics -->
                     <div class="summary-overview" id="summaryOverview">
                         <div style="text-align: center; padding: 30px; color: #6c757d;">
@@ -1018,6 +1044,7 @@
         let summaryData = null;
         let expandedMessageIds = new Set(); // Track which messages are expanded
         let currentlyViewingContent = null; // Track current expanded message
+        let currentDateFilter = { startDate: null, endDate: null }; // Track current date filter
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -1245,9 +1272,9 @@
             if (!modelCounts) return;
             
             // Update individual model counts
-            const bigCount = modelCounts['self.big_model'] || 0;
-            const middleCount = modelCounts['self.middle_model'] || 0;
-            const smallCount = modelCounts['self.small_model'] || 0;
+            const bigCount = modelCounts['big_model'] || 0;
+            const middleCount = modelCounts['middle_model'] || 0;
+            const smallCount = modelCounts['small_model'] || 0;
             
             document.getElementById('bigModelCount').innerHTML = 
                 `<strong>Usage: ${bigCount}</strong> requests`;
@@ -1801,9 +1828,20 @@
         
         async function loadSummaryData() {
             try {
+                // Get date range values from inputs if they exist
+                const startDate = document.getElementById('startDate')?.value || null;
+                const endDate = document.getElementById('endDate')?.value || null;
+                
+                // Build query string with date parameters if they exist
+                let summaryUrl = `${baseUrl}/api/summary`;
+                const params = new URLSearchParams();
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                if (params.toString()) summaryUrl += `?${params.toString()}`;
+                
                 // Fetch both summary and credits data in parallel
                 const [summaryResponse, creditsResponse] = await Promise.all([
-                    fetch(`${baseUrl}/api/summary`),
+                    fetch(summaryUrl),
                     fetch(`${baseUrl}/api/credits`)
                 ]);
                 
@@ -1827,6 +1865,7 @@
                 
                 summaryData = summaryDataJson.data;
                 updateSummaryDisplay(creditsData);
+                updateCurrentFilterDisplay(startDate, endDate);
                 
             } catch (error) {
                 console.error('Failed to load summary data:', error);
@@ -2042,6 +2081,97 @@
                     }
                 }
             });
+        }
+        function applyDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            // Update current filter
+            currentDateFilter.startDate = startDate || null;
+            currentDateFilter.endDate = endDate || null;
+            
+            // Reload summary data with new filter
+            loadSummaryData();
+        }
+        
+        function clearDateFilter() {
+            // Clear input fields
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            
+            // Reset current filter
+            currentDateFilter.startDate = null;
+            currentDateFilter.endDate = null;
+            
+            // Reload summary data without filter
+            loadSummaryData();
+        }
+        
+        function updateCurrentFilterDisplay(startDate, endDate) {
+            const filterDisplay = document.getElementById('current-filter');
+            
+            if (startDate && endDate) {
+                filterDisplay.textContent = `Showing data from ${startDate} to ${endDate}`;
+            } else if (startDate) {
+                filterDisplay.textContent = `Showing data from ${startDate} onwards`;
+            } else if (endDate) {
+                filterDisplay.textContent = `Showing data up to ${endDate}`;
+            } else {
+                filterDisplay.textContent = 'Showing all data';
+            }
+        }
+        
+        function setDateRange(range) {
+            const today = new Date();
+            let startDate = null;
+            let endDate = null;
+            
+            switch(range) {
+                case 'today':
+                    startDate = today.toISOString().split('T')[0];
+                    endDate = today.toISOString().split('T')[0];
+                    break;
+                    
+                case 'yesterday':
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    startDate = yesterday.toISOString().split('T')[0];
+                    endDate = yesterday.toISOString().split('T')[0];
+                    break;
+                    
+                case 'last7':
+                    const last7 = new Date(today);
+                    last7.setDate(last7.getDate() - 6); // 7 days including today
+                    startDate = last7.toISOString().split('T')[0];
+                    endDate = today.toISOString().split('T')[0];
+                    break;
+                    
+                case 'last30':
+                    const last30 = new Date(today);
+                    last30.setDate(last30.getDate() - 29); // 30 days including today
+                    startDate = last30.toISOString().split('T')[0];
+                    endDate = today.toISOString().split('T')[0];
+                    break;
+                    
+                case 'thisMonth':
+                    startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+                    endDate = today.toISOString().split('T')[0];
+                    break;
+                    
+                case 'lastMonth':
+                    const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+                    startDate = firstDayLastMonth.toISOString().split('T')[0];
+                    endDate = lastDayLastMonth.toISOString().split('T')[0];
+                    break;
+            }
+            
+            // Set date inputs
+            document.getElementById('startDate').value = startDate;
+            document.getElementById('endDate').value = endDate;
+            
+            // Apply the filter
+            applyDateFilter();
         }
     </script>
 </body>

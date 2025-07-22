@@ -4,7 +4,6 @@ from fastapi import HTTPException, Request
 from src.core.constants import Constants
 from src.models.claude import ClaudeMessagesRequest
 from src.services.history_manager import history_manager
-from src.utils.response_formatter import format_response_output
 
 
 def convert_openai_to_claude_response(

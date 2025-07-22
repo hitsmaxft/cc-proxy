@@ -29,13 +29,13 @@ class MessageHistoryDatabase:
                     CREATE TABLE IF NOT EXISTS message_history (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         request_id TEXT UNIQUE NOT NULL,
-                        timeetamp DATETIME NOT NULL,
+                        timestamp DATETIME NOT NULL,
                         model_name TEXT NOT NULL,
                         request_data TEXT NOT NULL,
                         response_data TEXT,
                         user_agent TEXT,
                         is_streaming BOOLEAN NOT NULL DEFAULT 0,
-                        request_length dNTEGER,
+                        request_length INTEGER,
                         response_length INTEGER,
                         status TEXT DEFAULT 'pending'
                     )
@@ -189,21 +189,41 @@ class MessageHistoryDatabase:
             logger.error(f"Failed to update response for {request_id}: {e}")
             return False
     
-    async def get_recent_messages(self, limit: int = 5) -> List[Dict[str, Any]]:
-        """Get the most recent messages from the database"""
+    async def get_recent_messages(self, limit: int = 5, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get the most recent messages from the database with optional date filtering"""
         await self.initialize()
         
         try:
+            query = """
+                SELECT id, request_id, timestamp, model_name, actual_model, request_data, 
+                       response_data, user_agent, is_streaming, request_length, 
+                       response_length, status, input_tokens, output_tokens, total_tokens
+                FROM message_history 
+                WHERE 1=1
+            """
+            
+            params = []
+            
+            # Add date filters if provided
+            if start_date:
+                # Convert to ISO format for start of day
+                start_datetime = f"{start_date}T00:00:00"
+                query += " AND timestamp >= ? "
+                params.append(start_datetime)
+            
+            if end_date:
+                # Convert to ISO format for end of day
+                end_datetime = f"{end_date}T23:59:59.999999"
+                query += " AND timestamp <= ? "
+                params.append(end_datetime)
+                
+            # Add ordering and limit
+            query += " ORDER BY timestamp DESC LIMIT ? "
+            params.append(limit)
+            
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
-                async with db.execute("""
-                    SELECT id, request_id, timestamp, model_name, actual_model, request_data, 
-                           response_data, user_agent, is_streaming, request_length, 
-                           response_length, status, input_tokens, output_tokens, total_tokens
-                    FROM message_history 
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                """, (limit,)) as cursor:
+                async with db.execute(query, params) as cursor:
                     rows = await cursor.fetchall()
                     
                     messages = []
@@ -283,32 +303,52 @@ class MessageHistoryDatabase:
             logger.error(f"Failed to cleanup old messages: {e}")
             return 0
     
-    async def get_token_usage_summary(self) -> List[Dict[str, Any]]:
-        """Get aggregated token usage summary by actual model"""
+    async def get_token_usage_summary(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get aggregated token usage summary by actual model with optional date range filtering"""
         await self.initialize()
         
         try:
+            query = """
+                SELECT 
+                    actual_model,
+                    COUNT(*) as request_count,
+                    SUM(COALESCE(input_tokens, 0)) as total_input_tokens,
+                    SUM(COALESCE(output_tokens, 0)) as total_output_tokens,
+                    SUM(COALESCE(total_tokens, 0)) as total_tokens,
+                    AVG(COALESCE(input_tokens, 0)) as avg_input_tokens,
+                    AVG(COALESCE(output_tokens, 0)) as avg_output_tokens,
+                    MIN(timestamp) as first_request,
+                    MAX(timestamp) as last_request,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_requests,
+                    SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial_requests,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_requests
+                FROM message_history 
+                WHERE actual_model IS NOT NULL AND actual_model != ''
+            """
+            
+            params = []
+            
+            # Add date filters if provided
+            if start_date:
+                # Convert to ISO format for start of day
+                start_datetime = f"{start_date}T00:00:00"
+                query += " AND timestamp >= ? "
+                params.append(start_datetime)
+            
+            if end_date:
+                # Convert to ISO format for end of day
+                end_datetime = f"{end_date}T23:59:59.999999"
+                query += " AND timestamp <= ? "
+                params.append(end_datetime)
+                
+            query += """
+                GROUP BY actual_model
+                ORDER BY total_tokens DESC
+            """
+            
             async with aiosqlite.connect(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
-                async with db.execute("""
-                    SELECT 
-                        actual_model,
-                        COUNT(*) as request_count,
-                        SUM(COALESCE(input_tokens, 0)) as total_input_tokens,
-                        SUM(COALESCE(output_tokens, 0)) as total_output_tokens,
-                        SUM(COALESCE(total_tokens, 0)) as total_tokens,
-                        AVG(COALESCE(input_tokens, 0)) as avg_input_tokens,
-                        AVG(COALESCE(output_tokens, 0)) as avg_output_tokens,
-                        MIN(timestamp) as first_request,
-                        MAX(timestamp) as last_request,
-                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_requests,
-                        SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial_requests,
-                        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_requests
-                    FROM message_history 
-                    WHERE actual_model IS NOT NULL AND actual_model != ''
-                    GROUP BY actual_model
-                    ORDER BY total_tokens DESC
-                """) as cursor:
+                async with db.execute(query, params) as cursor:
                     rows = await cursor.fetchall()
                     
                     summary = []

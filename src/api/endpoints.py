@@ -315,6 +315,28 @@ class ConfigUpdateRequest(BaseModel):
 @router.get("/api/config/get")
 async def get_config():
     """Get current model configuration and available options"""
+    # Get today's model usage from database
+    from datetime import date
+    today = date.today().isoformat()
+    
+    try:
+        model_usage = await history_manager.get_token_usage_summary(today, today)
+        
+        # Create model counters for today's usage
+        today_counts = {}
+        for usage in model_usage["by_model"]:
+            model_key = usage['model'].replace('-', '_')
+            today_counts[f"{model_key}"] = usage['request_count']
+        
+        # Add current configured models
+        today_counts['big_model'] = today_counts.get(f"{config.big_model.replace('-', '_')}", 0)
+        today_counts['middle_model'] = today_counts.get(f"{config.middle_model.replace('-', '_')}", 0)
+        today_counts['small_model'] = today_counts.get(f"{config.small_model.replace('-', '_')}", 0)
+        
+    except Exception as e:
+        logger.error(f"Error getting today's model usage: {e}")
+        today_counts = {}
+    
     return {
         "message": "Claude-to-OpenAI API Proxy v1.0.0",
         "status": "running",
@@ -337,7 +359,7 @@ async def get_config():
             "SMALL_MODELS": config.small_models
         },
         "base_url": config.openai_base_url,
-        "model_counts": model_manager.get_model_counters()
+        "model_counts": today_counts
     }
 
 
@@ -377,13 +399,13 @@ async def update_config(request: ConfigUpdateRequest):
 
 
 @router.get("/api/history")
-async def get_message_history(limit: int = 5):
-    """Get recent message history"""
+async def get_message_history(limit: int = 5, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get recent message history with optional date filtering"""
     try:
         if limit < 1 or limit > 50:
             limit = 5
             
-        history_response = await history_manager.get_recent_messages(limit)
+        history_response = await history_manager.get_recent_messages(limit, start_date, end_date)
         
         return {
             "status": "success",
@@ -419,10 +441,10 @@ async def get_message_details(message_id: int):
 
 
 @router.get("/api/summary")
-async def get_usage_summary():
-    """Get token usage summary aggregated by actual model"""
+async def get_usage_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get token usage summary aggregated by actual model with optional date filtering"""
     try:
-        summary = await history_manager.get_token_usage_summary()
+        summary = await history_manager.get_token_usage_summary(start_date, end_date)
         
         return {
             "status": "success",

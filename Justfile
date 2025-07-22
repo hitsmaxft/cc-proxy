@@ -3,7 +3,7 @@ list:
 
 start_conf _file args='':
     #!/usr/bin/env bash
-    uv run  claude-code-proxy  --env $HOME/.config/claude-code-proxy/{{_file}} {{args}}
+    uv run  claude-code-proxy  --env {{_file}} {{args}}
 
 
 updatedeps:
