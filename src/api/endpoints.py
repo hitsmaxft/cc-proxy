@@ -124,6 +124,7 @@ async def create_message(
                 )
                 return StreamingResponse(
                     convert_openai_streaming_to_claude_with_cancellation(
+                        openai_request,
                         openai_stream,
                         request,
                         logger,

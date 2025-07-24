@@ -1737,6 +1737,8 @@
             // Get stop reason from response data
             const stopReason = message.response_data?.stop_reason;
             if (!stopReason) return '';
+
+            if message.
             
             const badgeConfig = {
                 'end_turn': { icon: '🎯', label: 'Normal', class: 'stop-reason-end-turn' },
@@ -1774,7 +1776,7 @@
             
             // Extract tool name when stop_reason is tool_use
             let toolInfo = '';
-            if (stopReason === 'tool_use' && message.response_data?.tool_calls) {
+            if (stopReason === 'tool_use' || message.response_data?.tool_calls) {
                 const toolCalls = message.response_data.tool_calls;
                 const firstToolKey = Object.keys(toolCalls)[0];
                 

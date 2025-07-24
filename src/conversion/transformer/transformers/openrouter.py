@@ -1,8 +1,9 @@
 import fnmatch
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.conversion.transformer.base import AbstractTransformer
+from src.conversion.transformer.pipeline import TransformerPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +11,8 @@ logger = logging.getLogger(__name__)
 class OpenRouterTransformer(AbstractTransformer):
     """
     Transformer for OpenRouter API requests and responses with caching optimization.
+
+    LifeCycle: Per Request
 
     This transformer implements OpenRouter-specific features to optimize API usage:
     - Adds cache_control parameters for ephemeral caching of large content blocks
@@ -76,9 +79,10 @@ class OpenRouterTransformer(AbstractTransformer):
             bool: True if the provider matches OpenRouter configuration, False otherwise
         """
         configured_providers: List[str] = self.config.get("providers", ["openrouter"])
+
         return provider.lower() in [p.lower() for p in configured_providers]
 
-    def transformRequestIn(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def transformRequestIn(self, request: Dict[str, Any], pipeline: Optional[TransformerPipeline] = None) -> Dict[str, Any]:
         """
         Transform incoming request for OpenRouter API with caching optimization.
 
@@ -126,7 +130,7 @@ class OpenRouterTransformer(AbstractTransformer):
         logger.debug("Applied OpenRouter request transformations")
         return transformed
 
-    def _apply_ephemeral_caching(self, request: Dict[str, Any]) -> None:
+    def _apply_ephemeral_caching(self, request: Dict[str, Any], pipeline: Optional[TransformerPipeline] = None) -> None:
         """Apply ephemeral caching to large text blocks in system messages."""
         messages: List[Dict[str, Any]] = request.get("messages", [])
 
@@ -150,7 +154,6 @@ class OpenRouterTransformer(AbstractTransformer):
                 # Apply caching to large text blocks (>1000 chars) without existing cache_control
                 if is_text_block and text_length > 1000 and not has_cache_control:
                     content_block["cache_control"] = {"type": "ephemeral"}
-
     def transformResponseIn(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """
         Transform incoming response from OpenRouter API.
@@ -165,4 +168,11 @@ class OpenRouterTransformer(AbstractTransformer):
         Returns:
             Dict[str, Any]: The response unchanged, ready for downstream processing
         """
+        if not isinstance(response, dict):
+            return response
+
+        print("OpenRouter response received:", response)
         return response
+
+    def transformStreamingResponseIn(self, response_chunk):
+        return super().transformStreamingResponseIn(response_chunk)

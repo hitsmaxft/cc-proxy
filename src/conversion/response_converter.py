@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any, Dict
 import uuid
 from fastapi import HTTPException, Request, logger
 from src.core.constants import Constants
@@ -250,6 +251,7 @@ async def convert_openai_streaming_to_claude(
 
 
 async def convert_openai_streaming_to_claude_with_cancellation(
+    openai_request: Dict[str, Any],
     openai_stream,
     original_request: ClaudeMessagesRequest,
     logger,
@@ -296,6 +298,7 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
                     try:
                         chunk = json.loads(chunk_data)
+                        print(f"OpenAI chunk: {chunk}")  # Debugging line
                         # logger.info(f"OpenAI chunk: {chunk}")
                         usage = chunk.get("usage", None)
                         if usage:
@@ -383,14 +386,32 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
                                 # Try to parse complete JSON and send delta when we have valid JSON
                                 try:
-                                    json.loads(tool_call["args_buffer"])
+                                    args_buffer_loads =json.loads(tool_call["args_buffer"])
+
+                                    #FIXME bug fix for qwen3-coder, it will deserialize the JSON value, which should keep the original JSON string
+                                    if "qwen3_coder" in openai_request.get("model", "").lower().replace("-", "_"):
+                                        if isinstance(args_buffer_loads, dict):
+                                            for key, value in args_buffer_loads.items():
+                                                if isinstance(value, dict) or isinstance(value, list):
+                                                    args_buffer_loads[key] = json.dumps(value)
+                                                elif key == "content" and tool_call.get("name") == "Write":
+                                                    args_buffer_loads[key] = json.dumps(value, ensure_ascii=False) 
+                                                
+                                    
+                                    tool_call["args_buffer"] = json.dumps(args_buffer_loads, ensure_ascii=False)
+                                    # logger.info(f"Tool call args buffer: {tool_call['args_buffer']}")
+
                                     # If parsing succeeds and we haven't sent this JSON yet
                                     if not tool_call["json_sent"]:
                                         yield f"event: {Constants.EVENT_CONTENT_BLOCK_DELTA}\ndata: {json.dumps({'type': Constants.EVENT_CONTENT_BLOCK_DELTA, 'index': tool_call['claude_index'], 'delta': {'type': Constants.DELTA_INPUT_JSON, 'partial_json': tool_call['args_buffer']}}, ensure_ascii=False)}\n\n"
                                         tool_call["json_sent"] = True
+                                        finish_reason = "tool_calls"  # Ensure we handle tool calls correctly
                                 except json.JSONDecodeError:
                                     # JSON is incomplete, continue accumulating
                                     pass
+                                    
+                    if tool_block_counter > 0:
+                        finish_reason = "tool_calls"  # Ensure we handle tool calls correctly
 
                     # Handle finish reason
                     if finish_reason:
