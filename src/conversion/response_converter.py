@@ -1,13 +1,20 @@
 import json
+import logging
 import uuid
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, logger
 from src.core.constants import Constants
 from src.models.claude import ClaudeMessagesRequest
 from src.services.history_manager import history_manager
+from src.utils.token_counter import (
+    extract_token_usage,
+    estimate_input_tokens_from_request,
+)
+
+logger = logging.getLogger(__name__)
 
 
-def convert_openai_to_claude_response(
-    openai_response: dict, original_request: ClaudeMessagesRequest
+async def convert_openai_to_claude_response(
+    openai_response: dict, original_request: ClaudeMessagesRequest, request_id: str
 ) -> dict:
     """Convert OpenAI response to Claude format."""
 
@@ -59,10 +66,12 @@ def convert_openai_to_claude_response(
         "function_call": Constants.STOP_TOOL_USE,
     }.get(finish_reason, Constants.STOP_END_TURN)
 
+    # Extract token usage from response
+    input_tokens, output_tokens, total_tokens = extract_token_usage(openai_response)
 
     # Build Claude response
     claude_response = {
-        "id": openai_response.get("id", f"msg_{uuid.uuid4()}"),
+        "id": request_id,
         "type": "message",
         "role": Constants.ROLE_ASSISTANT,
         "model": original_request.model,
@@ -70,16 +79,33 @@ def convert_openai_to_claude_response(
         "stop_reason": stop_reason,
         "stop_sequence": None,
         "usage": {
-            "input_tokens": openai_response.get("usage", {}).get("prompt_tokens") or  0,
-            "output_tokens": openai_response.get("usage", {}).get("completion_tokens") or  0,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         },
     }
+
+    # Log the response to message history
+    try:
+        await history_manager.log_response(
+            request_id=request_id,
+            response_data={
+                **claude_response,
+                "_usage": openai_response.get("usage", {}),
+            },
+            status="completed",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+        )
+    except Exception as e:
+        logger.error(f"Failed to log response for request {request_id}: {e}")
 
     # Format the response with message type and stop reason indicators
     return claude_response
     # return format_response_output(claude_response)
 
 
+# deprecated
 async def convert_openai_streaming_to_claude(
     openai_stream, original_request: ClaudeMessagesRequest, logger
 ):
@@ -131,7 +157,7 @@ async def convert_openai_streaming_to_claude(
                     if "tool_calls" in delta:
                         for tc_delta in delta["tool_calls"]:
                             tc_index = tc_delta.get("index", 0)
-                            
+
                             # Initialize tool call tracking by index if not exists
                             if tc_index not in current_tool_calls:
                                 current_tool_calls[tc_index] = {
@@ -140,33 +166,41 @@ async def convert_openai_streaming_to_claude(
                                     "args_buffer": "",
                                     "json_sent": False,
                                     "claude_index": None,
-                                    "started": False
+                                    "started": False,
                                 }
-                            
+
                             tool_call = current_tool_calls[tc_index]
-                            
+
                             # Update tool call ID if provided
                             if tc_delta.get("id"):
                                 tool_call["id"] = tc_delta["id"]
-                            
+
                             # Update function name and start content block if we have both id and name
                             function_data = tc_delta.get(Constants.TOOL_FUNCTION, {})
                             if function_data.get("name"):
                                 tool_call["name"] = function_data["name"]
-                            
+
                             # Start content block when we have complete initial data
-                            if (tool_call["id"] and tool_call["name"] and not tool_call["started"]):
+                            if (
+                                tool_call["id"]
+                                and tool_call["name"]
+                                and not tool_call["started"]
+                            ):
                                 tool_block_counter += 1
                                 claude_index = text_block_index + tool_block_counter
                                 tool_call["claude_index"] = claude_index
                                 tool_call["started"] = True
-                                
+
                                 yield f"event: {Constants.EVENT_CONTENT_BLOCK_START}\ndata: {json.dumps({'type': Constants.EVENT_CONTENT_BLOCK_START, 'index': claude_index, 'content_block': {'type': Constants.CONTENT_TOOL_USE, 'id': tool_call['id'], 'name': tool_call['name'], 'input': {}}}, ensure_ascii=False)}\n\n"
-                            
+
                             # Handle function arguments
-                            if "arguments" in function_data and tool_call["started"] and function_data["arguments"] is not None:
+                            if (
+                                "arguments" in function_data
+                                and tool_call["started"]
+                                and function_data["arguments"] is not None
+                            ):
                                 tool_call["args_buffer"] += function_data["arguments"]
-                                
+
                                 # Try to parse complete JSON and send delta when we have valid JSON
                                 try:
                                     json.loads(tool_call["args_buffer"])
@@ -266,13 +300,18 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                         usage = chunk.get("usage", None)
                         if usage:
                             cache_read_input_tokens = 0
-                            prompt_tokens_details = usage.get('prompt_tokens_details', {})
+                            prompt_tokens_details = usage.get(
+                                "prompt_tokens_details", {}
+                            )
                             if prompt_tokens_details:
-                                cache_read_input_tokens = prompt_tokens_details.get('cached_tokens', 0)
+                                cache_read_input_tokens = prompt_tokens_details.get(
+                                    "cached_tokens", 0
+                                )
                             usage_data = {
-                                'input_tokens': usage.get('prompt_tokens', 0),
-                                'output_tokens': usage.get('completion_tokens', 0),
-                                'cache_read_input_tokens': cache_read_input_tokens
+                                "input_tokens": usage.get("prompt_tokens", 0),
+                                "output_tokens": usage.get("completion_tokens", 0),
+                                "cache_read_input_tokens": cache_read_input_tokens,
+                                **usage,
                             }
                             usage_data_received = True
 
@@ -298,7 +337,7 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                     if delta and "tool_calls" in delta and delta["tool_calls"]:
                         for tc_delta in delta["tool_calls"]:
                             tc_index = tc_delta.get("index", 0)
-                            
+
                             # Initialize tool call tracking by index if not exists
                             if tc_index not in current_tool_calls:
                                 current_tool_calls[tc_index] = {
@@ -307,33 +346,41 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                                     "args_buffer": "",
                                     "json_sent": False,
                                     "claude_index": None,
-                                    "started": False
+                                    "started": False,
                                 }
-                            
+
                             tool_call = current_tool_calls[tc_index]
-                            
+
                             # Update tool call ID if provided
                             if tc_delta.get("id"):
                                 tool_call["id"] = tc_delta["id"]
-                            
+
                             # Update function name and start content block if we have both id and name
                             function_data = tc_delta.get(Constants.TOOL_FUNCTION, {})
                             if function_data.get("name"):
                                 tool_call["name"] = function_data["name"]
-                            
+
                             # Start content block when we have complete initial data
-                            if (tool_call["id"] and tool_call["name"] and not tool_call["started"]):
+                            if (
+                                tool_call["id"]
+                                and tool_call["name"]
+                                and not tool_call["started"]
+                            ):
                                 tool_block_counter += 1
                                 claude_index = text_block_index + tool_block_counter
                                 tool_call["claude_index"] = claude_index
                                 tool_call["started"] = True
-                                
+
                                 yield f"event: {Constants.EVENT_CONTENT_BLOCK_START}\ndata: {json.dumps({'type': Constants.EVENT_CONTENT_BLOCK_START, 'index': claude_index, 'content_block': {'type': Constants.CONTENT_TOOL_USE, 'id': tool_call['id'], 'name': tool_call['name'], 'input': {}}}, ensure_ascii=False)}\n\n"
-                            
+
                             # Handle function arguments
-                            if "arguments" in function_data and tool_call["started"] and function_data["arguments"] is not None:
+                            if (
+                                "arguments" in function_data
+                                and tool_call["started"]
+                                and function_data["arguments"] is not None
+                            ):
                                 tool_call["args_buffer"] += function_data["arguments"]
-                                
+
                                 # Try to parse complete JSON and send delta when we have valid JSON
                                 try:
                                     json.loads(tool_call["args_buffer"])
@@ -368,9 +415,19 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                     "message": "Request was cancelled by client",
                 },
             }
+            await history_manager.log_response(
+                request_id=request_id,
+                response_data={"status_code": e.status_code, "error": error_event},
+                status="error",
+            )
             yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
             return
         else:
+            await history_manager.log_response(
+                request_id=request_id,
+                response_data={"status_code": e.status_code, "error": error_event},
+                status="error",
+            )
             raise
     except Exception as e:
         # Handle any streaming errors gracefully
@@ -383,6 +440,12 @@ async def convert_openai_streaming_to_claude_with_cancellation(
             "error": {"type": "api_error", "message": f"Streaming error: {str(e)}"},
         }
         yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        # Always log the final response state
+        await history_manager.log_response(
+            request_id=request_id,
+            response_data={"error": error_event},
+            status="error",
+        )
         return
 
     # Send final SSE events
@@ -395,19 +458,25 @@ async def convert_openai_streaming_to_claude_with_cancellation(
     # Ensure message history is updated with final state
     if not usage_data_received or usage_data.get("input_tokens", 0) == 0:
         # Estimate tokens if no usage data was received
-        from src.utils.token_counter import estimate_input_tokens_from_request, estimate_output_tokens_from_content
-        estimated_input = estimate_input_tokens_from_request({
-            "model": original_request.model,
-            "messages": original_request.messages,
-            "system": getattr(original_request, 'system', None)
-        })
+        from src.utils.token_counter import (
+            estimate_input_tokens_from_request,
+            estimate_output_tokens_from_content,
+        )
+
+        estimated_input = estimate_input_tokens_from_request(
+            {
+                "model": original_request.model,
+                "messages": original_request.messages,
+                "system": getattr(original_request, "system", None),
+            }
+        )
         estimated_output = estimate_output_tokens_from_content(content)
-        
+
         if not usage_data_received:
             usage_data = {
                 "input_tokens": estimated_input,
                 "output_tokens": estimated_output,
-                "cache_read_input_tokens": 0
+                "cache_read_input_tokens": 0,
             }
         else:
             # Fill in missing data
@@ -415,20 +484,22 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                 usage_data["input_tokens"] = estimated_input
             if usage_data.get("output_tokens", 0) == 0:
                 usage_data["output_tokens"] = estimated_output
-    
+
     # Always log the final response state
     await history_manager.log_response(
         request_id=request_id,
         response_data={
             "content": content,
             "tool_calls": current_tool_calls,
-            "stop_reason": final_stop_reason
+            "stop_reason": final_stop_reason,
+            "usage": usage_data,
         },
         status="completed" if stream_ended_normally else "partial",
         input_tokens=usage_data.get("input_tokens", 0),
         output_tokens=usage_data.get("output_tokens", 0),
-        total_tokens=(usage_data.get("input_tokens") or 0) + (usage_data.get("output_tokens") or 0)
+        total_tokens=(usage_data.get("input_tokens") or 0)
+        + (usage_data.get("output_tokens") or 0),
     )
-    
+
     yield f"event: {Constants.EVENT_MESSAGE_DELTA}\ndata: {json.dumps({'type': Constants.EVENT_MESSAGE_DELTA, 'delta': {'stop_reason': final_stop_reason, 'stop_sequence': None}, 'usage': usage_data}, ensure_ascii=False)}\n\n"
     yield f"event: {Constants.EVENT_MESSAGE_STOP}\ndata: {json.dumps({'type': Constants.EVENT_MESSAGE_STOP}, ensure_ascii=False)}\n\n"

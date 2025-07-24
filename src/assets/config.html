@@ -1721,9 +1721,14 @@
         function getTitle(message) {
             const content = message.response_data?.content;
             if (content && content.includes("isNewTopic")) {
-                const contentObj = JSON.parse(content);
-                if (contentObj && contentObj["title"]) {
-                    return contentObj["title"]
+                try {
+                    const contentObj = JSON.parse(content);
+                    if (contentObj && contentObj["title"]) {
+                        return contentObj["title"]
+                    }
+                } catch (e) {
+                    console.warn("Failed to parse content as JSON:", e);
+                    return null;
                 }
             }
             return null;
@@ -1784,11 +1789,11 @@
                 const content = message.response_data.content;
 
                 if (content && content.includes("isNewTopic")) {
-                    const contentObj = JSON.parse(content);
-                    if (contentObj && contentObj["title"]) {
+                    const title = getTitle(message);
+                    if (title) {
                         toolInfo = `<div class="message-type-indicator" style="margin-top: 4px;">
                             <span>Title:</span>
-                            <span style="font-weight: 500; color: #FFA500;">${contentObj['title']}</span>
+                            <span style="font-weight: 500; color: #FFA500;">${title}</span>
                         </div>`;
                     }
                 }

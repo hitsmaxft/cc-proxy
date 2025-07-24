@@ -43,12 +43,59 @@ pip install -r requirements.txt
 
 ### 2. Configure
 
+#### Option A: Environment Variables (.env file)
+
 ```bash
 cp .env.example .env
 # Edit .env and add your API configuration
 ```
 
+#### Option B: TOML Configuration File
+
+Create a configuration file (e.g., `providers.toml`) with your settings:
+
+```toml
+# Example providers.toml
+[config]
+port = 8082
+anthropic_api_key = ""
+log_level = "INFO"
+big_model = "gpt-4o"
+middle_model = "gpt-4o"
+small_model = "gpt-4o-mini"
+
+[[provider]]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+api_key = "your-api-key"
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+```
+
+**Configuration File Locations:**
+- Default location: `$HOME/.config/claude-code-proxy/providers.toml`
+- Custom location: Any path you specify
+
 ### 3. Start Server
+
+#### Using Justfile (Recommended)
+
+```bash
+# Start with default config file ($HOME/.config/claude-code-proxy/providers.toml)
+just load
+
+# Start with custom TOML config file
+just load_toml path/to/your/config.toml
+
+# Start with environment file
+just start_conf .env
+
+# List all available commands
+just list
+```
+
+#### Direct Commands
 
 ```bash
 # Direct run
@@ -56,6 +103,12 @@ python start_proxy.py
 
 # Or with UV
 uv run claude-code-proxy
+
+# With custom config file
+uv run claude-code-proxy --conf path/to/config.toml
+
+# With environment file
+uv run claude-code-proxy --env .env
 ```
 
 ### 4. Use with Claude Code

@@ -1,5 +1,4 @@
 [config]
-
 # Optional: Performance settings  
 max_tokens_limit="128000"
 # Minimum tokens limit for requests (to avoid errors with thinking model)
@@ -7,37 +6,56 @@ min_tokens_limit="40000"
 request_timeout="90"
 max_retries="2"
 port=8086
-anthropic_api_key="123"
+anthropic_api_key=""
 log_level="INFO"
 db_file="proxy.db"
 host="127.0.0.1"
-
 
 # default model
 big_model="claude_opus4"
 middle_model="claude_sonnet4"
 small_model="claude35_haiku"
 
-
-
 [[provider]]
-
 name = "demo"
 base_url = "https://demo.ai/api/openai/v1"
-api_key="sk-xjbd"
-
+api_key="sk-your-api-key"
 big_models=["claude_opus4","claude3_opus"]
 middle_models=["claude_sonnet4","claude37_sonnet"]
 small_models=["claude35_haiku","claude3_haiku"]
 
-
+[[provider]]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com/v1"
+api_key="your-deepseek-api-key"
+big_models=["deepseek-coder"]
+middle_models=["deepseek-chat"]
+small_models=["deepseek-chat"]
 
 [[provider]]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+api_key="your-openrouter-api-key"
+big_models=["anthropic/claude-3-opus-20240229", "openai/gpt-4o"]
+middle_models=["anthropic/claude-3-sonnet-20240229"]
+small_models=["anthropic/claude-3-haiku-20240307"]
 
-name = "demo2"
-base_url = "https://demo.ai/api/openai/v1"
-api_key="sk-xjbd"
+# Transformer configuration
+[transformers]
+[transformers.deepseek]
+enabled = true
+providers = ["deepseek"]
+models = ["deepseek-*"]
+max_output = 8000
 
-big_models=[]
-middle_models=[]
-small_models=[]
+
+[transformers.tooluse]
+enabled = false  # Disabled by default as it's covered by the DeepSeek transformer
+providers = ["deepseek"]
+models = ["*"]
+
+[transformers.openrouter]
+enabled = true
+providers = ["openrouter"]
+models = ["*"]
+cache_control = false

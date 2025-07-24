@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Header, Depends
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-        
+
 # Import aiohttp for making the request
 import requests
 from datetime import datetime
@@ -20,7 +20,6 @@ from src.conversion.response_converter import (
 )
 from src.core.model_manager import model_manager
 from src.services.history_manager import history_manager
-from src.utils.token_counter import extract_token_usage, estimate_input_tokens_from_request
 from src.storage.database import MessageHistoryDatabase
 
 router = APIRouter()
@@ -38,30 +37,38 @@ openai_client = OpenAIClient(
     api_version=config.azure_api_version,
 )
 
-async def validate_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
+
+async def validate_api_key(
+    x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)
+):
     """Validate the client's API key from either x-api-key header or Authorization header."""
     client_api_key = None
-    
+
     # Extract API key from headers
     if x_api_key:
         client_api_key = x_api_key
     elif authorization and authorization.startswith("Bearer "):
         client_api_key = authorization.replace("Bearer ", "")
-    
+
     # Skip validation if ANTHROPIC_API_KEY is not set in the environment
     if not config.anthropic_api_key:
         return
-        
+
     # Validate the client API key
     if not client_api_key or not config.validate_client_api_key(client_api_key):
         logger.warning(f"Invalid API key provided by client")
         raise HTTPException(
             status_code=401,
-            detail="Invalid API key. Please provide a valid Anthropic API key."
+            detail="Invalid API key. Please provide a valid Anthropic API key.",
         )
 
+
 @router.post("/v1/messages")
-async def create_message(request: ClaudeMessagesRequest, http_request: Request, _: None = Depends(validate_api_key)):
+async def create_message(
+    request: ClaudeMessagesRequest,
+    http_request: Request,
+    _: None = Depends(validate_api_key),
+):
     try:
         logger.debug(
             f"Processing Claude request: model={request.model}, stream={request.stream}"
@@ -72,12 +79,11 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
 
         user_agent = "claude-cli/1.0.43 (external, proxy)"
 
-
         # openrouter headers
         extra_headers = {
-            "user_agent" : user_agent,
+            "user_agent": user_agent,
             "HTTP-Referer": "https:://claudecode.com",
-            'X-Title': 'ClaudeCode'
+            "X-Title": "ClaudeCode",
         }
 
         if "user_agent" in http_request.headers:
@@ -85,30 +91,26 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
 
         for key in http_request.headers:
             if "anthropic" in key or "claude" in key:
-                extra_headers[key] =http_request.headers[key] 
-            
+                extra_headers[key] = http_request.headers[key]
 
         # Convert Claude request to OpenAI format
         openai_request = convert_claude_to_openai(request, model_manager)
 
         # pass extra_headers for openrouter
         openai_request["extra_headers"] = extra_headers
-        
+
         # Log the request to message history
         await history_manager.log_request(
             request_id=request_id,
             model_name=request.model,
             actual_model=openai_request["model"],
             request_data={
-                "model": request.model,
-                "messages": request.messages,
-                "max_tokens": request.max_tokens,
-                "stream": request.stream,
-                "system": getattr(request, 'system', None)
+                "_openai_model": openai_request["model"],
+                **request.dict(exclude_none=True),
             },
             user_agent=user_agent,
-            is_streaming=request.stream
-        ) 
+            is_streaming=request.stream,
+        )
 
         # Check if client disconnected before processing
         if await http_request.is_disconnected():
@@ -154,33 +156,10 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
             openai_response = await openai_client.create_chat_completion(
                 openai_request, request_id
             )
-            claude_response = convert_openai_to_claude_response(
-                openai_response, request
+            claude_response = await convert_openai_to_claude_response(
+                openai_response, request, request_id
             )
-            
-            # Extract token usage from response
-            input_tokens, output_tokens, total_tokens = extract_token_usage(openai_response)
-            
-            # If tokens not found in response, estimate input tokens
-            if input_tokens == 0:
-                input_tokens = estimate_input_tokens_from_request({
-                    "model": request.model,
-                    "messages": request.messages,
-                    "system": getattr(request, 'system', None)
-                })
-                if total_tokens == 0:
-                    total_tokens = input_tokens + output_tokens
-            
-            # Log the response to message history
-            await history_manager.log_response(
-                request_id=request_id,
-                response_data=claude_response,
-                status="completed",
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens
-            )
-            
+
             return claude_response
     except HTTPException:
         raise
@@ -194,7 +173,9 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
 
 
 @router.post("/v1/messages/count_tokens")
-async def count_tokens(request: ClaudeTokenCountRequest, _: None = Depends(validate_api_key)):
+async def count_tokens(
+    request: ClaudeTokenCountRequest, _: None = Depends(validate_api_key)
+):
     try:
         # For token counting, we'll use a simple estimation
         # In a real implementation, you might want to use tiktoken or similar
@@ -300,9 +281,9 @@ async def root(request: Request):
         "log_level": config.log_level,
         "max_tokens_limit": config.max_tokens_limit,
         "request_timeout": config.request_timeout,
-        "client_api_key_validation": bool(config.anthropic_api_key)
+        "client_api_key_validation": bool(config.anthropic_api_key),
     }
-    
+
     return templates.TemplateResponse("config.html", template_vars)
 
 
@@ -317,26 +298,33 @@ async def get_config():
     """Get current model configuration and available options"""
     # Get today's model usage from database
     from datetime import date
+
     today = date.today().isoformat()
-    
+
     try:
         model_usage = await history_manager.get_token_usage_summary(today, today)
-        
+
         # Create model counters for today's usage
         today_counts = {}
         for usage in model_usage["by_model"]:
-            model_key = usage['model'].replace('-', '_')
-            today_counts[f"{model_key}"] = usage['request_count']
-        
+            model_key = usage["model"].replace("-", "_")
+            today_counts[f"{model_key}"] = usage["request_count"]
+
         # Add current configured models
-        today_counts['big_model'] = today_counts.get(f"{config.big_model.replace('-', '_')}", 0)
-        today_counts['middle_model'] = today_counts.get(f"{config.middle_model.replace('-', '_')}", 0)
-        today_counts['small_model'] = today_counts.get(f"{config.small_model.replace('-', '_')}", 0)
-        
+        today_counts["big_model"] = today_counts.get(
+            f"{config.big_model.replace('-', '_')}", 0
+        )
+        today_counts["middle_model"] = today_counts.get(
+            f"{config.middle_model.replace('-', '_')}", 0
+        )
+        today_counts["small_model"] = today_counts.get(
+            f"{config.small_model.replace('-', '_')}", 0
+        )
+
     except Exception as e:
         logger.error(f"Error getting today's model usage: {e}")
         today_counts = {}
-    
+
     return {
         "message": "Claude-to-OpenAI API Proxy v1.0.0",
         "status": "running",
@@ -351,15 +339,15 @@ async def get_config():
         "current": {
             "BIG_MODEL": config.big_model,
             "MIDDLE_MODEL": config.middle_model,
-            "SMALL_MODEL": config.small_model
+            "SMALL_MODEL": config.small_model,
         },
         "available": {
             "BIG_MODELS": config.big_models,
             "MIDDLE_MODELS": config.middle_models,
-            "SMALL_MODELS": config.small_models
+            "SMALL_MODELS": config.small_models,
         },
         "base_url": config.openai_base_url,
-        "model_counts": today_counts
+        "model_counts": today_counts,
     }
 
 
@@ -374,14 +362,12 @@ async def update_config(request: ConfigUpdateRequest):
             config.middle_model = request.MIDDLE_MODEL
         if request.SMALL_MODEL is not None:
             config.small_model = request.SMALL_MODEL
-        
+
         # Save to database
         await config_db.save_model_config(
-            config.big_model,
-            config.middle_model,
-            config.small_model
+            config.big_model, config.middle_model, config.small_model
         )
-        
+
         # Return updated configuration
         return {
             "status": "success",
@@ -389,9 +375,9 @@ async def update_config(request: ConfigUpdateRequest):
             "current": {
                 "BIG_MODEL": config.big_model,
                 "MIDDLE_MODEL": config.middle_model,
-                "SMALL_MODEL": config.small_model
+                "SMALL_MODEL": config.small_model,
             },
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error updating configuration: {e}")
@@ -399,20 +385,24 @@ async def update_config(request: ConfigUpdateRequest):
 
 
 @router.get("/api/history")
-async def get_message_history(limit: int = 5, start_date: Optional[str] = None, end_date: Optional[str] = None):
+async def get_message_history(
+    limit: int = 5, start_date: Optional[str] = None, end_date: Optional[str] = None
+):
     """Get recent message history with optional date filtering"""
     try:
         if limit < 1 or limit > 50:
             limit = 5
-            
-        history_response = await history_manager.get_recent_messages(limit, start_date, end_date)
-        
+
+        history_response = await history_manager.get_recent_messages(
+            limit, start_date, end_date
+        )
+
         return {
             "status": "success",
             "data": history_response.dict(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"Error retrieving message history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -423,16 +413,16 @@ async def get_message_details(message_id: int):
     """Get detailed information for a specific message"""
     try:
         message = await history_manager.get_message_by_id(message_id)
-        
+
         if not message:
             raise HTTPException(status_code=404, detail="Message not found")
-        
+
         return {
             "status": "success",
             "data": message.dict(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -441,17 +431,19 @@ async def get_message_details(message_id: int):
 
 
 @router.get("/api/summary")
-async def get_usage_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
+async def get_usage_summary(
+    start_date: Optional[str] = None, end_date: Optional[str] = None
+):
     """Get token usage summary aggregated by actual model with optional date filtering"""
     try:
         summary = await history_manager.get_token_usage_summary(start_date, end_date)
-        
+
         return {
             "status": "success",
             "data": summary,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"Error retrieving usage summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -472,43 +464,36 @@ async def get_openrouter_credits():
             return {
                 "status": "not_openrouter",
                 "message": "Not using OpenRouter base URL",
-                "data": None
+                "data": None,
             }
-        
-
 
         openai_api_key = op["api_key"]
         openai_base_url = op["base_url"]
 
         headers = {
             "Authorization": f"Bearer {openai_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         response = requests.get("https://openrouter.ai/api/v1/credits", headers=headers)
         if response.status_code == 200:
             data = response.json()
-            
+
             return {
                 "status": "success",
-                "provider": "openrouter", 
+                "provider": "openrouter",
                 "data": {
                     "total": data.get("data", {}).get("total_credits", 0),
-                    "usage": data.get("data", {}).get("total_usage", 0)
+                    "usage": data.get("data", {}).get("total_usage", 0),
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
         else:
             return {
                 "status": "error",
                 "message": f"Failed to fetch credits: {response.status_code}",
-                "data": None
+                "data": None,
             }
     except Exception as e:
         logger.error(f"Error fetching OpenRouter credits: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "data": None
-        }
-
+        return {"status": "error", "message": str(e), "data": None}

@@ -10,6 +10,9 @@ updatedeps:
     uv export --no-editable --no-dev --no-hashes  --no-emit-project >requirements.txt
 
 
+load_toml file args='':
+    #!/usr/bin/env bash
+    uv run  claude-code-proxy  --conf {{file}} {{args}}
 load args='':
     #!/usr/bin/env bash
     uv run  claude-code-proxy  --conf $HOME/.config/claude-code-proxy/providers.toml {{args}}

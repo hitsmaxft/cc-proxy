@@ -14,12 +14,13 @@ class ModelProvider(TypedDict):
     middle_models: List[str]
     small_models: List[str]
 
+
 # Configuration
 class Config:
-    openai_base_url:str =None
+    openai_base_url: str = None
     openai_api_key: str = None
-    openai_base_url: str =None
-    azure_api_version:str=None
+    openai_base_url: str = None
+    azure_api_version: str = None
     request_timeout: int
 
     port: int
@@ -33,17 +34,17 @@ class Config:
     small_model: str
     big_model: str
     middle_model: str
-    max_tokens_limit:int
-    max_retries:int
-    port:int
-    db_file:str
+    max_tokens_limit: int
+    max_retries: int
+    port: int
+    db_file: str
 
-    big_models : List[str] = []
-    middle_models : List[str] = []
-    small_models : List[str] = []
+    big_models: List[str] = []
+    middle_models: List[str] = []
+    small_models: List[str] = []
 
     def init_toml(self):
-        for (k, v) in self.config.items():
+        for k, v in self.config.items():
             print(f"set config.{k}={v}")
             if k in ["port", "request_timeout", "min_tokens_limit", "max_tokens_limit"]:
                 setattr(self, k, int(v))
@@ -52,18 +53,17 @@ class Config:
         self.load_providers(self.provider)
 
     def load_providers(self, provider: List[Dict[str, Any]]):
-        self.provider_names = [ x["name"] for x in provider]
+        self.provider_names = [x["name"] for x in provider]
         self.provider = provider
 
         for provider in provider:
-            print(f"add provider {provider["name"]}")
+            print(f"add provider {provider['name']}")
             for m in ["big_models", "middle_models", "small_models"]:
                 if m in provider:
                     getattr(self, m).extend(provider[m])
-        print("big_models:", self.big_models)
-        print("middle_models:", self.middle_models)
-        print("small_models:", self.small_models)
-
+        print("loaded big_models:", self.big_models)
+        print("loaded middle_models:", self.middle_models)
+        print("loaded small_models:", self.small_models)
 
     def load_env(self):
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
@@ -73,9 +73,13 @@ class Config:
         # Add Anthropic API key for client validation
         self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not self.anthropic_api_key:
-            print("Warning: ANTHROPIC_API_KEY not set. Client API key validation will be disabled.")
+            print(
+                "Warning: ANTHROPIC_API_KEY not set. Client API key validation will be disabled."
+            )
 
-        self.openai_base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.openai_base_url = os.environ.get(
+            "OPENAI_BASE_URL", "https://api.openai.com/v1"
+        )
         self.azure_api_version = os.environ.get("AZURE_API_VERSION")  # For Azure OpenAI
         self.host = os.environ.get("HOST", "0.0.0.0")
         self.port = int(os.environ.get("PORT", "8082"))
@@ -90,10 +94,24 @@ class Config:
 
         # Model settings - BIG and SMALL models
         # Available model lists for CLI
-        self.big_models = [m.strip() for m in os.environ.get("BIG_MODELS", os.environ.get("BIG_MODEL", "gpt-4o")).split(",")]
-        self.middle_models = [m.strip() for m in os.environ.get("MIDDLE_MODELS",os.environ.get("MIDDLE_MODEL", self.big_models)).split(",")]
-        self.small_models = [m.strip() for m in os.environ.get("SMALL_MODELS",os.environ.get("SMALL_MODEL", "gpt-4o-mini")).split(",")]
-
+        self.big_models = [
+            m.strip()
+            for m in os.environ.get(
+                "BIG_MODELS", os.environ.get("BIG_MODEL", "gpt-4o")
+            ).split(",")
+        ]
+        self.middle_models = [
+            m.strip()
+            for m in os.environ.get(
+                "MIDDLE_MODELS", os.environ.get("MIDDLE_MODEL", self.big_models)
+            ).split(",")
+        ]
+        self.small_models = [
+            m.strip()
+            for m in os.environ.get(
+                "SMALL_MODELS", os.environ.get("SMALL_MODEL", "gpt-4o-mini")
+            ).split(",")
+        ]
 
         self.big_model = self.big_models[0]
         self.middle_model = self.middle_models[0]
@@ -103,15 +121,16 @@ class Config:
         self.web_search = os.environ.get("WEB_SEARCH")  # For Azure OpenAI
 
         self.load_providers(
-            [ModelProvider(
-            name="default",
-            base_url=self.openai_base_url,
-            api_key=self.openai_api_key,
-            big_models=self.big_models,
-            middle_models=self.middle_models,
-            small_models= self.small_models,
-        )]
-
+            [
+                ModelProvider(
+                    name="default",
+                    base_url=self.openai_base_url,
+                    api_key=self.openai_api_key,
+                    big_models=self.big_models,
+                    middle_models=self.middle_models,
+                    small_models=self.small_models,
+                )
+            ]
         )
 
     def validate_api_key(self):
@@ -119,7 +138,7 @@ class Config:
         if not self.openai_api_key:
             return False
         # Basic format check for OpenAI API keys
-        if not self.openai_api_key.startswith('sk-'):
+        if not self.openai_api_key.startswith("sk-"):
             return False
         return True
 
@@ -136,65 +155,86 @@ class Config:
         """Load model configuration from database if available"""
         if db_path is None:
             db_path = self.db_file
-        
+
         try:
             # Import here to avoid circular imports
             sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             from src.storage.database import MessageHistoryDatabase
-            
+
             db = MessageHistoryDatabase(db_path)
             db_config = await db.load_model_config()
-            
+
             if db_config:
                 loaded_models = []
-                if 'BIG_MODEL' in db_config and db_config['BIG_MODEL'] in self.big_models:
+                if (
+                    "BIG_MODEL" in db_config
+                    and db_config["BIG_MODEL"] in self.big_models
+                ):
                     old_model = self.big_model
-                    self.big_model = db_config['BIG_MODEL']
+                    self.big_model = db_config["BIG_MODEL"]
                     loaded_models.append(f"BIG: {old_model} -> {self.big_model}")
-                
-                if 'MIDDLE_MODEL' in db_config and db_config['MIDDLE_MODEL'] in self.middle_models:
+                else:
+                    self.big_model = self.big_models[0]
+
+                if (
+                    "MIDDLE_MODEL" in db_config
+                    and db_config["MIDDLE_MODEL"] in self.middle_models
+                ):
                     old_model = self.middle_model
-                    self.middle_model = db_config['MIDDLE_MODEL']
+                    self.middle_model = db_config["MIDDLE_MODEL"]
                     loaded_models.append(f"MIDDLE: {old_model} -> {self.middle_model}")
-                
-                if 'SMALL_MODEL' in db_config and db_config['SMALL_MODEL'] in self.small_models:
+                else:
+                    self.middle_model = self.middle_models[0]
+
+                if (
+                    "SMALL_MODEL" in db_config
+                    and db_config["SMALL_MODEL"] in self.small_models
+                ):
                     old_model = self.small_model
-                    self.small_model = db_config['SMALL_MODEL']
+                    self.small_model = db_config["SMALL_MODEL"]
                     loaded_models.append(f"SMALL: {old_model} -> {self.small_model}")
-                
+                else:
+                    self.small_model = self.small_models[0]
+
                 if loaded_models:
-                    print(f"📥 Loaded model configuration from database: {', '.join(loaded_models)}")
+                    print(
+                        f"📥 Loaded model configuration from database: {', '.join(loaded_models)}"
+                    )
                 return True
             return False
-            
+
         except Exception as e:
             print(f"⚠️  Warning: Could not load model config from database: {e}")
             return False
 
+
 # Global config instance - will be initialized from main.py
 config = None
 
-def init_config(config_file:Optional[str] = None):
+
+def init_config(config_file: Optional[str] = None):
     """Initialize global config instance"""
 
     global config
     if config_file:
         print(f"load toml config from {config_file}")
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             data = toml.load(f)
             config = Config()
             for key, value in data.items():
                 setattr(config, key, value)
-            for (k, v) in data.get("config", {}).items():
+            for k, v in data.get("config", {}).items():
                 os.environ[k] = "v"
             config.init_toml()
             print(f" Configuration loaded: providers={config.provider_names}")
-                
+
     else:
         try:
             config = Config()
             config.load_env()
-            print(f" Configuration loaded: API_KEY={'*' * 20}..., BASE_URL='{config.openai_base_url}'")
+            print(
+                f" Configuration loaded: API_KEY={'*' * 20}..., BASE_URL='{config.openai_base_url}'"
+            )
             return config
         except Exception as e:
             print(f"=4 Configuration Error: {e}")

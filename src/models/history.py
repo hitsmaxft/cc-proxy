@@ -2,8 +2,10 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+
 class MessageHistoryItem(BaseModel):
     """Pydantic model for a single message history item"""
+
     id: int
     request_id: str
     timestamp: str
@@ -20,14 +22,18 @@ class MessageHistoryItem(BaseModel):
     output_tokens: int = 0
     total_tokens: int = 0
 
+
 class MessageHistoryResponse(BaseModel):
     """Pydantic model for the message history API response"""
+
     messages: List[MessageHistoryItem]
     total_count: int
     timestamp: str
 
+
 class MessageHistorySummary(BaseModel):
     """Pydantic model for a summarized message history item (for list display)"""
+
     id: int
     request_id: str
     timestamp: str
@@ -40,12 +46,12 @@ class MessageHistorySummary(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
-    
+
     @property
     def formatted_timestamp(self) -> str:
         """Return formatted timestamp for display"""
         try:
-            dt = datetime.fromisoformat(self.timestamp.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         except:
             return self.timestamp

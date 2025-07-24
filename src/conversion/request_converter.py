@@ -9,13 +9,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def get_web_search(claude_request: ClaudeMessagesRequest):
     if claude_request.tools:
         for tool in claude_request.tools:
             if tool.type == "web_search_20250305":
                 return True
     return False
-        
 
 
 def convert_claude_to_openai(
@@ -24,7 +24,9 @@ def convert_claude_to_openai(
     """Convert Claude API request format to OpenAI format."""
 
     # Map model
-    openai_model:ModelConfig = model_manager.map_claude_model_to_openai(claude_request.model)
+    openai_model: ModelConfig = model_manager.map_claude_model_to_openai(
+        claude_request.model
+    )
 
     # Convert messages
     openai_messages = []
@@ -34,7 +36,7 @@ def convert_claude_to_openai(
     if model_manager.enable_websearch() and get_web_search(claude_request):
         # use plugin for search on claude
         openai_model.model = f"{openai_model.model}:online"
-        extra_query["plugins"] = [{"id": "web" }]
+        extra_query["plugins"] = [{"id": "web"}]
 
     # Add system message if present
     if claude_request.system:
@@ -98,7 +100,7 @@ def convert_claude_to_openai(
         ),
         "temperature": claude_request.temperature,
         "stream": claude_request.stream,
-        ** openai_model,
+        **openai_model,
     }
 
     # add custom query for websearch or other custom feature
@@ -120,7 +122,7 @@ def convert_claude_to_openai(
         for tool in claude_request.tools:
             if tool.type == "web_search_20250305":
                 continue
-                    
+
             if tool.name and tool.name.strip():
                 openai_tools.append(
                     {
@@ -157,7 +159,7 @@ def convert_claude_user_message(msg: ClaudeMessage) -> Dict[str, Any]:
     """Convert Claude user message to OpenAI format."""
     if msg.content is None:
         return {"role": Constants.ROLE_USER, "content": ""}
-    
+
     if isinstance(msg.content, str):
         return {"role": Constants.ROLE_USER, "content": msg.content}
 
@@ -196,7 +198,7 @@ def convert_claude_assistant_message(msg: ClaudeMessage) -> Dict[str, Any]:
 
     if msg.content is None:
         return {"role": Constants.ROLE_ASSISTANT, "content": None}
-    
+
     if isinstance(msg.content, str):
         return {"role": Constants.ROLE_ASSISTANT, "content": msg.content}
 

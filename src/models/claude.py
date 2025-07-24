@@ -1,13 +1,16 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Union, Literal
 
+
 class ClaudeContentBlockText(BaseModel):
     type: Literal["text"]
     text: str
 
+
 class ClaudeContentBlockImage(BaseModel):
     type: Literal["image"]
     source: Dict[str, Any]
+
 
 class ClaudeContentBlockToolUse(BaseModel):
     type: Literal["tool_use"]
@@ -15,28 +18,46 @@ class ClaudeContentBlockToolUse(BaseModel):
     name: str
     input: Dict[str, Any]
 
+
 class ClaudeContentBlockToolResult(BaseModel):
     type: Literal["tool_result"]
     tool_use_id: str
     content: Union[str, List[Dict[str, Any]], Dict[str, Any]]
 
+
 class ClaudeSystemContent(BaseModel):
     type: Literal["text"]
     text: str
 
+
 class ClaudeMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: Union[str, List[Union[ClaudeContentBlockText, ClaudeContentBlockImage, ClaudeContentBlockToolUse, ClaudeContentBlockToolResult]]]
+    content: Union[
+        str,
+        List[
+            Union[
+                ClaudeContentBlockText,
+                ClaudeContentBlockImage,
+                ClaudeContentBlockToolUse,
+                ClaudeContentBlockToolResult,
+            ]
+        ],
+    ]
+
 
 class ClaudeTool(BaseModel):
     name: str
     description: Optional[str] = None
 
     type: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = None # claude web search may not contains this input
+    input_schema: Optional[Dict[str, Any]] = (
+        None  # claude web search may not contains this input
+    )
+
 
 class ClaudeThinkingConfig(BaseModel):
     enabled: bool = True
+
 
 class ClaudeMessagesRequest(BaseModel):
     model: str
@@ -53,6 +74,7 @@ class ClaudeMessagesRequest(BaseModel):
     tool_choice: Optional[Dict[str, Any]] = None
     thinking: Optional[ClaudeThinkingConfig] = None
 
+
 class ClaudeTokenCountRequest(BaseModel):
     model: str
     messages: List[ClaudeMessage]
@@ -64,7 +86,7 @@ class ClaudeTokenCountRequest(BaseModel):
 
 # Web Search Tool Implementation
 class WebSearchTool(ClaudeTool):
-    def __init__(self, max_uses:int = 3):
+    def __init__(self, max_uses: int = 3):
         super().__init__(
             name="web_search",
             description="Performs web searches with configurable filters",
@@ -74,23 +96,43 @@ class WebSearchTool(ClaudeTool):
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
                     "max_uses": {
-                        "type": "integer", 
+                        "type": "integer",
                         "minimum": 1,
                         "maximum": 5,
-                        "default": 3
+                        "default": 3,
                     },
                     "allowed_domains": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "default": []
+                        "default": [],
                     },
                     "user_location": {
                         "type": "object",
                         "properties": {
                             "country": {"type": "string", "pattern": "^[A-Z]{2}$"}
-                        }
-                    }
+                        },
+                    },
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         )
+
+
+if __name__ == "__main__":
+    request = ClaudeMessagesRequest(
+        model="claude-3-sonnet",
+        max_tokens=1000,
+        messages=[
+            ClaudeMessage(
+                role="user",
+                content=[
+                    ClaudeContentBlockText(
+                        type="text", text="What is the capital of France?"
+                    ),
+                ],
+            )
+        ],
+        tools=[WebSearchTool(max_uses=3)],
+        thinking=ClaudeThinkingConfig(enabled=True),
+    )
+    print(request.dict())
