@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ page_title | default('Claude Code Proxy Configuration') }}</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
         * {
             margin: 0;
@@ -886,6 +887,9 @@
                         <span id="connectionStatus" class="status-indicator status-disconnected">
                             Disconnected
                         </span>
+                        <span id="websocketStatus" class="websocket-status disconnected">
+                            WS Disconnected
+                        </span>
                     </div>
                     <div class="auto-refresh">
                         <input type="checkbox" id="autoRefresh" checked>
@@ -967,6 +971,12 @@
                 <h2 class="panel-title">Message History</h2>
                 
                 <div id="historyContent" style="display: none;">
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-secondary btn-export" id="exportHistory" onclick="exportHistoryData()">Export History</button>
+                    </div>
+                    <div class="export-progress">
+                        <div class="export-progress-bar" style="width: 0%"></div>
+                    </div>
                     <div class="message-list" id="messageList">
                         <div style="text-align: center; padding: 30px; color: #6c757d;">
                             <div class="loading" style="margin-bottom: 20px;"></div>
@@ -986,7 +996,14 @@
                 <h2 class="panel-title">📈 Usage Summary</h2>
                 
                 <div id="summaryContent" style="display: none;">
-                    <!-- Date Range Filter -->
+                    <!-- Export and Date Range Filter -->
+                    <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary btn-export" id="exportSummary" onclick="exportSummaryData()">Export Summary</button>
+                        <button class="btn btn-secondary btn-export" id="exportConfig" onclick="exportConfigData()">Export Config</button>
+                    </div>
+                    <div class="export-progress">
+                        <div class="export-progress-bar" style="width: 0%"></div>
+                    </div>
                     <div class="date-filter" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
                         <h3 style="margin-bottom: 15px; font-size: 1.1em; color: #495057;">Filter by Date</h3>
                         <div style="display: flex; gap: 15px; flex-wrap: wrap;">
@@ -1034,6 +1051,17 @@
         </div>
     </div>
 
+    <!-- Performance Indicator -->
+    <div id="performanceIndicator" class="performance-indicator">
+        <div class="metric">Requests: <span id="requestCount" class="value">0</span></div>
+        <div class="metric">Avg Response: <span id="avgResponseTime" class="value">0ms</span></div>
+        <div class="metric">Active WS: <span id="websocketStatusIndicator" class="value">Disconnected</span></div>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notificationContainer"></div>
+
+    <script src="app.js"></script>
     <script>
         let baseUrl = '';
         let autoRefreshInterval = null;
@@ -1079,6 +1107,13 @@
                     document.getElementById('historyPlaceholder').style.display = 'none';
                     document.getElementById('summaryPlaceholder').style.display = 'none';
                     
+                    // Initialize ProxyManager
+                    if (window.proxyManager) {
+                        window.proxyManager.connectWithRetry(port).catch(error => {
+                            console.warn('Enhanced connection failed:', error);
+                        });
+                    }
+                    
                     // Start auto-refresh if enabled
                     if (document.getElementById('autoRefresh').checked) {
                         startAutoRefresh();
@@ -1106,6 +1141,11 @@
             const statusEl = document.getElementById('connectionStatus');
             statusEl.className = `status-indicator status-${status}`;
             statusEl.textContent = text;
+            
+            // Clean up resources when disconnecting
+            if (status === 'disconnected' && window.proxyManager) {
+                window.proxyManager.disconnect();
+            }
         }
 
         function showMessage(text, type) {
@@ -2177,6 +2217,37 @@
             
             // Apply the filter
             applyDateFilter();
+        }
+        
+        // Export functions
+        function exportHistoryData() {
+            if (window.proxyManager && window.proxyManager.isConnected) {
+                window.proxyManager.exportData('history').catch(error => {
+                    showMessage(`Export failed: ${error.message}`, 'error');
+                });
+            } else {
+                showMessage('Please connect to the proxy first', 'error');
+            }
+        }
+        
+        function exportSummaryData() {
+            if (window.proxyManager && window.proxyManager.isConnected) {
+                window.proxyManager.exportData('summary').catch(error => {
+                    showMessage(`Export failed: ${error.message}`, 'error');
+                });
+            } else {
+                showMessage('Please connect to the proxy first', 'error');
+            }
+        }
+        
+        function exportConfigData() {
+            if (window.proxyManager && window.proxyManager.isConnected) {
+                window.proxyManager.exportData('config').catch(error => {
+                    showMessage(`Export failed: ${error.message}`, 'error');
+                });
+            } else {
+                showMessage('Please connect to the proxy first', 'error');
+            }
         }
     </script>
 </body>
