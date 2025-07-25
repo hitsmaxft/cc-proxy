@@ -288,6 +288,17 @@ async def root(request: Request):
     return templates.TemplateResponse("config.html", template_vars)
 
 
+@router.get("/app.js")
+async def app_js():
+    """Serve the enhanced JavaScript application file"""
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+    import os
+    
+    app_js_path = os.path.join("src", "assets", "app.js")
+    return FileResponse(app_js_path, media_type="application/javascript")
+
+
 class ConfigUpdateRequest(BaseModel):
     BIG_MODEL: Optional[str] = None
     MIDDLE_MODEL: Optional[str] = None
@@ -387,21 +398,61 @@ async def update_config(request: ConfigUpdateRequest):
 
 @router.get("/api/history")
 async def get_message_history(
-    limit: int = 5, start_date: Optional[str] = None, end_date: Optional[str] = None
+    limit: int = 5, 
+    start_date: Optional[str] = None, 
+    end_date: Optional[str] = None,
+    start_hour: Optional[int] = None,
+    end_hour: Optional[int] = None,
+    date: Optional[str] = None,
+    hour: Optional[int] = None
 ):
-    """Get recent message history with optional date filtering"""
+    """Get recent message history with optional date and hour filtering"""
     try:
-        if limit < 1 or limit > 50:
+        if limit < 1 or limit > 500:
             limit = 5
 
-        history_response = await history_manager.get_recent_messages(
-            limit, start_date, end_date
-        )
+        # Handle specific date/hour filtering
+        if date and hour is not None:
+            # Get messages for a specific date and hour
+            start_dt = f"{date}T{str(hour).zfill(2)}:00:00"
+            end_dt = f"{date}T{str(hour).zfill(2)}:59:59"
+            history_response = await history_manager.get_recent_messages(
+                limit, start_dt, end_dt
+            )
+        elif date:
+            # Get messages for entire day
+            start_dt = f"{date}T00:00:00"
+            end_dt = f"{date}T23:59:59"
+            history_response = await history_manager.get_recent_messages(
+                limit, start_dt, end_dt
+            )
+        else:
+            # Use provided start/end dates with optional hour filtering
+            filtered_start_date = start_date
+            filtered_end_date = end_date
+            
+            if start_date and start_hour is not None:
+                filtered_start_date = f"{start_date}T{str(start_hour).zfill(2)}:00:00"
+            if end_date and end_hour is not None:
+                filtered_end_date = f"{end_date}T{str(end_hour).zfill(2)}:59:59"
+            
+            history_response = await history_manager.get_recent_messages(
+                limit, filtered_start_date, filtered_end_date
+            )
 
         return {
             "status": "success",
             "data": history_response.dict(),
             "timestamp": datetime.now().isoformat(),
+            "filters": {
+                "date": date,
+                "hour": hour,
+                "start_date": start_date,
+                "end_date": end_date,
+                "start_hour": start_hour,
+                "end_hour": end_hour,
+                "limit": limit
+            }
         }
 
     except Exception as e:
