@@ -3,7 +3,7 @@ list:
 
 start_conf _file args='':
     #!/usr/bin/env bash
-    uv run  claude-code-proxy  --env {{_file}} {{args}}
+    uv run  cc-proxy  --env {{_file}} {{args}}
 
 
 updatedeps:
@@ -12,7 +12,7 @@ updatedeps:
 
 load_toml file args='':
     #!/usr/bin/env bash
-    uv run  claude-code-proxy  --conf {{file}} {{args}}
+    uv run  cc-proxy  --conf {{file}} {{args}}
 load args='':
     #!/usr/bin/env bash
-    uv run  claude-code-proxy  --conf $HOME/.config/claude-code-proxy/providers.toml {{args}}
+    uv run  cc-proxy  --conf $HOME/.config/claude-code-proxy/providers.toml {{args}}
