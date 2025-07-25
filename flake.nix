@@ -90,7 +90,7 @@
 
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/cc-proxy";
+          program = "${self.packages.${system}.default}/bin/hello";
         };
 
         devShells = {
@@ -123,8 +123,8 @@
                     src = lib.fileset.toSource {
                       root = old.src;
                       fileset = lib.fileset.unions [
-                        (old.src + "/pyproject.toml")
-                        (old.src + "/README.md") 
+                        # # (old.src + "/pyproject.toml")
+                        # (old.src + "/README.md") 
                       ];
                     };
                     nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem {
