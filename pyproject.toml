@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "claude-code-proxy"
+name = "ccc-proxy"
 version = "1.0.0"
 description = "Proxy server enabling Claude Code to work with OpenAI-compatible API providers"
 readme = "README.md"
@@ -47,7 +47,8 @@ Repository = "https://github.com/holegots/claude-code-proxy.git"
 Issues = "https://github.com/holegots/claude-code-proxy/issues"
 
 [project.scripts]
-claude-code-proxy = "src.main:main"
+
+cc-proxy = "src.main:main"
 
 [tool.uv]
 dev-dependencies = [
