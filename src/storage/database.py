@@ -82,6 +82,14 @@ class MessageHistoryDatabase:
                         ADD COLUMN total_tokens INTEGER DEFAULT 0
                     """)
 
+                # Add openai_request column if it doesn't exist
+                if "openai_request" not in column_names:
+                    logger.info("Adding openai_request column to message_history table")
+                    await db.execute("""
+                        ALTER TABLE message_history 
+                        ADD COLUMN openai_request TEXT
+                    """)
+
                 # Create index for better query performance
                 await db.execute("""
                     CREATE INDEX IF NOT EXISTS idx_timestamp 
@@ -120,6 +128,7 @@ class MessageHistoryDatabase:
         request_data: Dict[str, Any],
         user_agent: Optional[str] = None,
         is_streaming: bool = False,
+        openai_request: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Store a request in the database"""
         await self.initialize()
@@ -127,14 +136,15 @@ class MessageHistoryDatabase:
         try:
             request_json = json.dumps(request_data, ensure_ascii=False)
             request_length = len(request_json)
+            openai_request_json = json.dumps(openai_request, ensure_ascii=False) if openai_request else None
 
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     """
                     INSERT INTO message_history 
                     (request_id, timestamp, model_name, actual_model, request_data, user_agent, 
-                     is_streaming, request_length, status, input_tokens, output_tokens, total_tokens)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     is_streaming, request_length, status, input_tokens, output_tokens, total_tokens, openai_request)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         request_id,
@@ -149,6 +159,7 @@ class MessageHistoryDatabase:
                         0,  # input_tokens - will be updated later
                         0,  # output_tokens - will be updated later
                         0,  # total_tokens - will be updated later
+                        openai_request_json,
                     ),
                 )
                 await db.commit()
@@ -216,7 +227,7 @@ class MessageHistoryDatabase:
             query = """
                 SELECT id, request_id, timestamp, model_name, actual_model, request_data, 
                        response_data, user_agent, is_streaming, request_length, 
-                       response_length, status, input_tokens, output_tokens, total_tokens
+                       response_length, status, input_tokens, output_tokens, total_tokens, openai_request
                 FROM message_history 
                 WHERE 1=1
             """
@@ -259,9 +270,15 @@ class MessageHistoryDatabase:
                                 if row["response_data"]
                                 else {}
                             )
+                            openai_request = (
+                                json.loads(row["openai_request"])
+                                if row["openai_request"]
+                                else {}
+                            )
                         except json.JSONDecodeError:
                             request_data = {}
                             response_data = {}
+                            openai_request = {}
 
                         # Handle token columns that might not exist in older database schemas
                         input_tokens = 0
@@ -292,6 +309,7 @@ class MessageHistoryDatabase:
                                 "actual_model": row["actual_model"],
                                 "request_data": request_data,
                                 "response_data": response_data,
+                                "openai_request": openai_request,
                                 "user_agent": row["user_agent"],
                                 "is_streaming": bool(row["is_streaming"]),
                                 "request_length": row["request_length"] or 0,

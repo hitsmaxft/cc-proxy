@@ -134,6 +134,7 @@ def main():
         log_level = "info"
 
     from src.api.endpoints import router as api_router
+    from src.api.websocket_manager import router as websocket_router
 
     app = FastAPI(title="Claude-to-OpenAI API Proxy", version="1.0.0")
 
@@ -147,6 +148,7 @@ def main():
     )
 
     app.include_router(api_router)
+    app.include_router(websocket_router)
 
     # other http exception
     @app.exception_handler(StarletteHTTPException)

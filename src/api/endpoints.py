@@ -21,6 +21,7 @@ from src.conversion.response_converter import (
 from src.core.model_manager import model_manager
 from src.services.history_manager import history_manager
 from src.storage.database import MessageHistoryDatabase
+from src.api.websocket_manager import broadcast_model_update, broadcast_history_update
 
 router = APIRouter()
 
@@ -288,14 +289,26 @@ async def root(request: Request):
     return templates.TemplateResponse("config.html", template_vars)
 
 
-@router.get("/app.js")
-async def app_js():
+@router.get("/styles.css")
+async def assets_styles_css():
     """Serve the enhanced JavaScript application file"""
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
     import os
-    
-    app_js_path = os.path.join("src", "assets", "app.js")
+
+    app_styles_path = os.path.join("src", "assets", "styles.css")
+    return FileResponse(app_styles_path, media_type="text/css")
+
+@router.get("/{app}.js")
+async def assets_app_js(app: str):
+    """Serve the enhanced JavaScript application file"""
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+    import os
+
+    app_js_path = os.path.join("src", "assets", f"{app}.js")
+    if not os.path.exists(app_js_path):
+        raise HTTPException(status_code=404, detail=f"{app}.js not found")
     return FileResponse(app_js_path, media_type="application/javascript")
 
 
@@ -379,6 +392,9 @@ async def update_config(request: ConfigUpdateRequest):
         await config_db.save_model_config(
             config.big_model, config.middle_model, config.small_model
         )
+
+        # Broadcast update to WebSocket clients
+        await broadcast_model_update(config.big_model, config.middle_model, config.small_model)
 
         # Return updated configuration
         return {
