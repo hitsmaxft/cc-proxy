@@ -13,6 +13,7 @@ from src.utils.token_counter import (
 
 logger = logging.getLogger(__name__)
 
+
 def fix_qwen3_coder_json(
     args_buffer: str, model_name: str, tool_call: Dict[str, Any] = None
 ) -> str:
@@ -47,6 +48,7 @@ def fix_qwen3_coder_json(
         except json.JSONDecodeError:
             return args_buffer
     return args_buffer
+
 
 async def convert_openai_to_claude_response(
     openai_response: dict, original_request: ClaudeMessagesRequest, request_id: str
@@ -419,19 +421,33 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
                                 # Try to parse complete JSON and send delta when we have valid JSON
                                 try:
-                                    args_buffer_loads =json.loads(tool_call["args_buffer"])
+                                    args_buffer_loads = json.loads(
+                                        tool_call["args_buffer"]
+                                    )
 
-                                    #FIXME bug fix for qwen3-coder, it will deserialize the JSON value, which should keep the original JSON string
-                                    if "qwen3_coder" in openai_request.get("model", "").lower().replace("-", "_") and tool_call.get("name") == "Write":
+                                    # FIXME bug fix for qwen3-coder, it will deserialize the JSON value, which should keep the original JSON string
+                                    if (
+                                        "qwen3_coder"
+                                        in openai_request.get("model", "")
+                                        .lower()
+                                        .replace("-", "_")
+                                        and tool_call.get("name") == "Write"
+                                    ):
                                         if isinstance(args_buffer_loads, dict):
                                             for key, value in args_buffer_loads.items():
-                                                if isinstance(value, dict) or isinstance(value, list):
-                                                    args_buffer_loads[key] = json.dumps(value)
+                                                if isinstance(
+                                                    value, dict
+                                                ) or isinstance(value, list):
+                                                    args_buffer_loads[key] = json.dumps(
+                                                        value
+                                                    )
                                                 # elif key == "content" and tool_call.get("name") == "Write" and not value.startswith("\""):
-                                                #     args_buffer_loads[key] = json.dumps(value, ensure_ascii=False) 
+                                                #     args_buffer_loads[key] = json.dumps(value, ensure_ascii=False)
                                         finish_reason = "tool_calls"  # Ensure we handle tool calls correctly
-                                    
-                                    tool_call["args_buffer"] = json.dumps(args_buffer_loads, ensure_ascii=False)
+
+                                    tool_call["args_buffer"] = json.dumps(
+                                        args_buffer_loads, ensure_ascii=False
+                                    )
                                     # logger.info(f"Tool call args buffer: {tool_call['args_buffer']}")
 
                                     # If parsing succeeds and we haven't sent this JSON yet
@@ -441,9 +457,11 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                                 except json.JSONDecodeError:
                                     # JSON is incomplete, continue accumulating
                                     pass
-                                    
+
                     if tool_block_counter > 0:
-                        finish_reason = "tool_calls"  # Ensure we handle tool calls correctly
+                        finish_reason = (
+                            "tool_calls"  # Ensure we handle tool calls correctly
+                        )
 
                     # Handle finish reason
                     if finish_reason:

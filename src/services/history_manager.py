@@ -1,7 +1,5 @@
-import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import asyncio
 
 from src.storage.database import MessageHistoryDatabase
 from src.models.history import (
@@ -287,6 +285,29 @@ class HistoryManager:
                 "timestamp": datetime.now().isoformat(),
                 "date_range": {"start_date": start_date, "end_date": end_date},
             }
+
+    async def update_openai_request(
+        self,
+        request_id: str,
+        openai_request: Dict[str, Any],
+    ) -> bool:
+        """Update the OpenAI request data for an existing request"""
+        try:
+            success = await self.database.update_openai_request(
+                request_id=request_id,
+                openai_request=openai_request,
+            )
+
+            if success:
+                logger.debug(f"Successfully updated OpenAI request {request_id}")
+            else:
+                logger.warning(f"Failed to update OpenAI request {request_id}")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Error updating OpenAI request {request_id}: {e}")
+            return False
 
 
 # Global history manager instance

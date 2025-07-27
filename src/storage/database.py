@@ -136,7 +136,11 @@ class MessageHistoryDatabase:
         try:
             request_json = json.dumps(request_data, ensure_ascii=False)
             request_length = len(request_json)
-            openai_request_json = json.dumps(openai_request, ensure_ascii=False) if openai_request else None
+            openai_request_json = (
+                json.dumps(openai_request, ensure_ascii=False)
+                if openai_request
+                else None
+            )
 
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
@@ -169,6 +173,33 @@ class MessageHistoryDatabase:
 
         except Exception as e:
             logger.error(f"Failed to store request {request_id}: {e}")
+            return False
+
+    async def update_openai_request(
+        self, request_id: str, openai_request: Dict[str, Any]
+    ) -> bool:
+        """Update the OpenAI request data for a stored request"""
+        await self.initialize()
+
+        try:
+            openai_request_json = json.dumps(openai_request, ensure_ascii=False)
+
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    UPDATE message_history 
+                    SET openai_request = ?
+                    WHERE request_id = ?
+                """,
+                    (openai_request_json, request_id),
+                )
+                await db.commit()
+
+            logger.debug(f"Updated OpenAI request for {request_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to update OpenAI request for {request_id}: {e}")
             return False
 
     async def update_response(

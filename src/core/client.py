@@ -15,6 +15,8 @@ from openai._exceptions import (
 
 from src.conversion.transformer.pipeline import TransformerPipeline
 from src.conversion.transformer.config import transformer_config
+from src.core.model_manager import ModelConfig
+from src.services.history_manager import history_manager
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +59,7 @@ class OpenAIClient:
             )
         self.active_requests: Dict[str, asyncio.Event] = {}
 
-    def get_client(self, request: Dict[str, Any]) -> AsyncOpenAI:
-        api_key = request.get("api_key", None)
-        base_url = request.get("base_url", None)
-
+    def get_client(self, api_key: str, base_url: str) -> AsyncOpenAI:
         if not api_key:
             return self.client
 
@@ -83,7 +82,7 @@ class OpenAIClient:
         return client
 
     async def create_chat_completion(
-        self, request: Dict[str, Any], request_id: Optional[str] = None
+        self, request: Dict[str, Any], request_id: str, model_config: ModelConfig
     ) -> Dict[str, Any]:
         """Send chat completion to OpenAI API with cancellation support."""
 
@@ -94,18 +93,18 @@ class OpenAIClient:
 
         try:
             # Extract provider info for transformer selection
-            provider = self._extract_provider_from_request(request)
-            model = request.get("model", "")
+            provider = model_config["provider"]
+            model = model_config["model"]
+            client = self.get_client(model_config["api_key"], model_config["base_url"])
 
             # Apply transformers to request
             transformed_request = self._apply_request_transformers(
                 request, provider, model
             )
 
-            client = self.get_client(transformed_request)
-
-            del transformed_request["base_url"]
-            del transformed_request["api_key"]
+            await history_manager.update_openai_request(
+                request_id=request_id, openai_request=transformed_request
+            )
 
             # Create task that can be cancelled
             completion_task = asyncio.create_task(
@@ -174,7 +173,7 @@ class OpenAIClient:
                 del self.active_requests[request_id]
 
     async def create_chat_completion_stream(
-        self, request: Dict[str, Any], request_id: Optional[str] = None
+        self, request: Dict[str, Any], request_id: str, model_config: ModelConfig
     ) -> AsyncGenerator[str, None]:
         """Send streaming chat completion to OpenAI API with cancellation support."""
 
@@ -185,18 +184,15 @@ class OpenAIClient:
 
         try:
             # Extract provider info for transformer selection
-            client = self.get_client(request)
-            provider = self._extract_provider_from_request(request)
-            model = request.get("model", "")
+            client = self.get_client(model_config["api_key"], model_config["base_url"])
 
-            del request["api_key"]
+            provider = model_config["provider"]
+            model = model_config["model"]
 
             # Apply transformers to request
             transformed_request = self._apply_request_transformers(
                 request, provider, model
             )
-
-            del transformed_request["base_url"]
 
             # Ensure stream is enabled
             # transformed_request["stream"] = True
@@ -205,6 +201,10 @@ class OpenAIClient:
             # transformed_request["stream_options"]["include_usage"] = True
 
             logger.debug(f"Transformed request for streaming: {transformed_request}")
+
+            await history_manager.update_openai_request(
+                request_id=request_id, openai_request=transformed_request
+            )
 
             # Create the streaming completion
             streaming_completion = await client.chat.completions.create(
@@ -314,48 +314,6 @@ class OpenAIClient:
             self.active_requests[request_id].set()
             return True
         return False
-
-    def _extract_provider_from_request(self, request: Dict[str, Any]) -> str:
-        """
-        Extract the provider name from the request.
-
-        Args:
-            request: The request object
-
-        Returns:
-            The provider name or a default value
-        """
-        # Try to extract from base_url
-        base_url = request.get("base_url", "").lower()
-
-        if "openai" in base_url:
-            return "openai"
-        elif "azure" in base_url:
-            return "azure"
-        elif "openrouter.ai" in base_url:
-            return "openrouter"
-        elif "anthropic" in base_url:
-            return "anthropic"
-        elif "gemini" in base_url or "google" in base_url:
-            return "google"
-        elif "deepseek" in base_url:
-            return "deepseek"
-
-        # Default to the first part of the model name if available
-        model = request.get("model", "")
-        if model:
-            prefix = model.split("-")[0]
-            if prefix in ["gpt", "o1"]:
-                return "openai"
-            elif prefix in ["deepseek"]:
-                return "deepseek"
-            elif prefix in ["claude"]:
-                return "anthropic"
-            elif prefix in ["gemini"]:
-                return "google"
-
-        # Default
-        return "unknown"
 
     def _apply_request_transformers(
         self, request: Dict[str, Any], provider: str, model: str

@@ -6,6 +6,7 @@ class ModelConfig(TypedDict):
     model: str
     base_url: str
     api_key: str
+    provider: str
 
 
 class ModelManager:
@@ -77,6 +78,7 @@ class ModelManager:
                     model=model,
                     base_url=p["base_url"],
                     api_key=p["api_key"],
+                    provider=p["name"],
                 )
         raise Exception(f"model {model} not found in providers")
 

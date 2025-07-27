@@ -82,14 +82,15 @@ class TransformerRegistry:
             config = configs.get(name, {})
             transformer = transformer_cls(config)
 
-            logger.debug(
-                f"Testing transformer '{name}' for provider '{provider}' and model '{model}'"
-            )
             if transformer.should_apply_to(provider, model):
                 logger.debug(
                     f"Adding transformer '{name}' for provider '{provider}' and model '{model}'"
                 )
                 result.append(transformer)
+            else:
+                logger.debug(
+                    f"Skip transformer '{name}' for provider '{provider}' and model '{model}'"
+                )
 
         return result
 

@@ -82,7 +82,9 @@ class OpenRouterTransformer(AbstractTransformer):
 
         return provider.lower() in [p.lower() for p in configured_providers]
 
-    def transformRequestIn(self, request: Dict[str, Any], pipeline: Optional[TransformerPipeline] = None) -> Dict[str, Any]:
+    def transformRequestIn(
+        self, request: Dict[str, Any], pipeline: Optional[TransformerPipeline] = None
+    ) -> Dict[str, Any]:
         """
         Transform incoming request for OpenRouter API with caching optimization.
 
@@ -130,7 +132,9 @@ class OpenRouterTransformer(AbstractTransformer):
         logger.debug("Applied OpenRouter request transformations")
         return transformed
 
-    def _apply_ephemeral_caching(self, request: Dict[str, Any], pipeline: Optional[TransformerPipeline] = None) -> None:
+    def _apply_ephemeral_caching(
+        self, request: Dict[str, Any], pipeline: Optional[TransformerPipeline] = None
+    ) -> None:
         """Apply ephemeral caching to large text blocks in system messages."""
         messages: List[Dict[str, Any]] = request.get("messages", [])
 
@@ -154,6 +158,7 @@ class OpenRouterTransformer(AbstractTransformer):
                 # Apply caching to large text blocks (>1000 chars) without existing cache_control
                 if is_text_block and text_length > 1000 and not has_cache_control:
                     content_block["cache_control"] = {"type": "ephemeral"}
+
     def transformResponseIn(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """
         Transform incoming response from OpenRouter API.

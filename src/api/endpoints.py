@@ -100,13 +100,14 @@ async def create_message(
         # pass extra_headers for openrouter
         openai_request["extra_headers"] = extra_headers
 
+        model_config = model_manager.map_claude_model_to_openai(request.model)
+
         # Log the request to message history
         await history_manager.log_request(
             request_id=request_id,
             model_name=request.model,
             actual_model=openai_request["model"],
             request_data=request.dict(exclude_none=True),
-            openai_request=openai_request,
             user_agent=user_agent,
             is_streaming=request.stream,
         )
@@ -119,7 +120,7 @@ async def create_message(
             # Streaming response - wrap in error handling
             try:
                 openai_stream = openai_client.create_chat_completion_stream(
-                    openai_request, request_id
+                    openai_request, request_id, model_config
                 )
                 return StreamingResponse(
                     convert_openai_streaming_to_claude_with_cancellation(
@@ -154,7 +155,7 @@ async def create_message(
         else:
             # Non-streaming response
             openai_response = await openai_client.create_chat_completion(
-                openai_request, request_id
+                openai_request, request_id, model_config
             )
             claude_response = await convert_openai_to_claude_response(
                 openai_response, request, request_id
@@ -297,6 +298,7 @@ async def assets_styles_css():
     app_styles_path = os.path.join("src", "assets", "styles.css")
     return FileResponse(app_styles_path, media_type="text/css")
 
+
 @router.get("/{app}.js")
 async def assets_app_js(app: str):
     """Serve the enhanced JavaScript application file"""
@@ -392,7 +394,9 @@ async def update_config(request: ConfigUpdateRequest):
         )
 
         # Broadcast update to WebSocket clients
-        await broadcast_model_update(config.big_model, config.middle_model, config.small_model)
+        await broadcast_model_update(
+            config.big_model, config.middle_model, config.small_model
+        )
 
         # Return updated configuration
         return {
@@ -412,13 +416,13 @@ async def update_config(request: ConfigUpdateRequest):
 
 @router.get("/api/history")
 async def get_message_history(
-    limit: int = 5, 
-    start_date: Optional[str] = None, 
+    limit: int = 5,
+    start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     start_hour: Optional[int] = None,
     end_hour: Optional[int] = None,
     date: Optional[str] = None,
-    hour: Optional[int] = None
+    hour: Optional[int] = None,
 ):
     """Get recent message history with optional date and hour filtering"""
     try:
@@ -444,12 +448,12 @@ async def get_message_history(
             # Use provided start/end dates with optional hour filtering
             filtered_start_date = start_date
             filtered_end_date = end_date
-            
+
             if start_date and start_hour is not None:
                 filtered_start_date = f"{start_date}T{str(start_hour).zfill(2)}:00:00"
             if end_date and end_hour is not None:
                 filtered_end_date = f"{end_date}T{str(end_hour).zfill(2)}:59:59"
-            
+
             history_response = await history_manager.get_recent_messages(
                 limit, filtered_start_date, filtered_end_date
             )
@@ -465,8 +469,8 @@ async def get_message_history(
                 "end_date": end_date,
                 "start_hour": start_hour,
                 "end_hour": end_hour,
-                "limit": limit
-            }
+                "limit": limit,
+            },
         }
 
     except Exception as e:

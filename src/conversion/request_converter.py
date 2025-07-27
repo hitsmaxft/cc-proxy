@@ -18,6 +18,12 @@ def get_web_search(claude_request: ClaudeMessagesRequest):
     return False
 
 
+def get_mode_config(model: str, model_manager: ModelManager) -> ModelConfig:
+    # Map model
+    openai_model: ModelConfig = model_manager.map_claude_model_to_openai(model)
+    return openai_model
+
+
 def convert_claude_to_openai(
     claude_request: ClaudeMessagesRequest, model_manager: ModelManager
 ) -> Dict[str, Any]:
@@ -100,7 +106,7 @@ def convert_claude_to_openai(
         ),
         "temperature": claude_request.temperature,
         "stream": claude_request.stream,
-        **openai_model,
+        "model": openai_model["model"],
     }
 
     # add custom query for websearch or other custom feature
