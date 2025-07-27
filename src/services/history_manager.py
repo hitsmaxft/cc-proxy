@@ -28,6 +28,7 @@ class HistoryManager:
         model_name: str,
         actual_model: str,
         request_data: Dict[str, Any],
+        openai_request: Optional[Dict[str, Any]] = None,
         user_agent: Optional[str] = None,
         is_streaming: bool = False,
     ) -> bool:
@@ -43,6 +44,7 @@ class HistoryManager:
                 request_data=clean_request_data,
                 user_agent=user_agent,
                 is_streaming=is_streaming,
+                openai_request=openai_request,
             )
 
             if success:

@@ -105,10 +105,8 @@ async def create_message(
             request_id=request_id,
             model_name=request.model,
             actual_model=openai_request["model"],
-            request_data={
-                "_openai_model": openai_request["model"],
-                **request.dict(exclude_none=True),
-            },
+            request_data=request.dict(exclude_none=True),
+            openai_request=openai_request,
             user_agent=user_agent,
             is_streaming=request.stream,
         )

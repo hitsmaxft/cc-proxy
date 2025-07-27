@@ -504,6 +504,7 @@ function updateHistoryDisplay() {
                         <div id="message-content-${message.id}" class="message-content${expandedClass}">
                             <div class="json-toggle">
                                 <button onclick="showJsonContent('${message.id}', 'request', event);" class="active">Request</button>
+                                <button onclick="showJsonContent('${message.id}', 'openai_request', event);" >OpenAiRequest</button>
                                 <button onclick="showJsonContent('${message.id}', 'response', event);">Response</button>
                             </div>
                             <div id="json-content-${message.id}" class="json-viewer"></div>
@@ -578,7 +579,14 @@ function showJsonContent(messageId, type, event) {
     }
 
     // Show the requested content
-    const content = type === 'request' ? message.request_data : message.response_data;
+    var content = ""
+    if (type === 'request' ) {
+        content =  message.request_data;
+    }  else if (type === 'openai_request') {
+        content = message.openai_request;
+    } else {
+        content = message.response_data;
+    }
     if (jsonContentEl) {
         jsonContentEl.textContent = JSON.stringify(content, null, 2);
     }
@@ -630,6 +638,7 @@ function appendNewMessages(newMessages) {
                         <div id="message-content-${message.id}" class="message-content">
                             <div class="json-toggle">
                                 <button onclick="showJsonContent('${message.id}', 'request', event);" class="active">Request</button>
+                                <button onclick="showJsonContent('${message.id}', 'openai_request', event);" >OpenAI Request</button>
                                 <button onclick="showJsonContent('${message.id}', 'response', event);">Response</button>
                             </div>
                             <div id="json-content-${message.id}" class="json-viewer"></div>

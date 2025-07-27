@@ -275,6 +275,11 @@ class MessageHistoryDatabase:
                                 if row["openai_request"]
                                 else {}
                             )
+                            openai_request = (
+                                json.loads(row["openai_request"])
+                                if row["openai_request"]
+                                else {}
+                            )
                         except json.JSONDecodeError:
                             request_data = {}
                             response_data = {}

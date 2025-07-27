@@ -12,6 +12,7 @@ class MessageHistoryItem(BaseModel):
     model_name: str
     actual_model: str
     request_data: Dict[str, Any]
+    openai_request: Dict[str, Any]
     response_data: Dict[str, Any]
     user_agent: Optional[str] = None
     is_streaming: bool = False
