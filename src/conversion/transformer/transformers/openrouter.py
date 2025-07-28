@@ -176,7 +176,6 @@ class OpenRouterTransformer(AbstractTransformer):
         if not isinstance(response, dict):
             return response
 
-        print("OpenRouter response received:", response)
         return response
 
     def transformStreamingResponseIn(self, response_chunk):
