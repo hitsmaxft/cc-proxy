@@ -90,9 +90,9 @@ async def create_message(
         if "user_agent" in http_request.headers:
             user_agent = http_request.headers.get("user_agent")
 
-        for key in http_request.headers:
-            if "anthropic" in key or "claude" in key:
-                extra_headers[key] = http_request.headers[key]
+        # for key in http_request.headers:
+        #     if "anthropic" in key or "claude" in key:
+        #         extra_headers[key] = http_request.headers[key]
 
         # Convert Claude request to OpenAI format
         openai_request = convert_claude_to_openai(request, model_manager)

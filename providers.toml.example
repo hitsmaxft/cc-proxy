@@ -48,12 +48,6 @@ providers = ["deepseek"]
 models = ["deepseek-*"]
 max_output = 8000
 
-
-[transformers.tooluse]
-enabled = false  # Disabled by default as it's covered by the DeepSeek transformer
-providers = ["deepseek"]
-models = ["*"]
-
 [transformers.openrouter]
 enabled = true
 providers = ["openrouter"]
