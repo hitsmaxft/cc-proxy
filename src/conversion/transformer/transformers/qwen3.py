@@ -64,18 +64,15 @@ class QwenTransformer(AbstractTransformer):
             # Ensure tool_call is a dictionary
             if isinstance(tool_call, dict):
                 # Check for 'name' and 'arguments' keys
-                if 'name' not in tool_call or 'arguments' not in tool_call:
+                if 'index' not in tool_call or 'function' not in tool_call:
                     logger.error(f"Invalid tool call format: {tool_call}")
                     continue
                 else:
 
-                    tool_name = tool_call['name']
-
+                    tool_index= int(tool_call['index'])
                     tool_param_config = None
-                    for tool in self.tools:
-                        if tool['name'] == tool_name:
-                            tool_param_config = tool.get('input_schema', {}).get('properties', {})
-                            break   
+                    tool_param_config = self.tools[tool_index].get('input_schema', {}).get('properties', {})
+
                     if not tool_param_config:
                         continue
 
@@ -89,7 +86,7 @@ class QwenTransformer(AbstractTransformer):
                                     param_type = tool_param_config[key].get('type', 'string')
                                     if param_type == 'string' and not isinstance(value, str):
                                         logger.warning(
-                                            f"Expected string for {key} in tool {tool_name}, got {type(value).__name__}. Converting to string."
+                                            f"Expected string for {key} in tool,  got {type(value).__name__}. Converting to string."
                                         )
                                         tool_arguments[key] = json.dumps(value)
                             # tool_call['arguments'] = json.dumps(tool_arguments)
