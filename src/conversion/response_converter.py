@@ -14,41 +14,6 @@ from src.utils.token_counter import (
 logger = logging.getLogger(__name__)
 
 
-def fix_qwen3_coder_json(
-    args_buffer: str, model_name: str, tool_call: Dict[str, Any] = None
-) -> str:
-    """
-    Fixes JSON formatting issues specific to qwen3_coder model responses.
-    This function handles special JSON formatting requirements for qwen3_coder model responses,
-    where certain dictionary values need to be converted to JSON strings.
-    Args:
-        args_buffer (str): The input JSON string to be processed
-        model_name (str): The name of the model being used
-    Returns:
-        str: The processed JSON string. If the model name contains 'qwen3_coder',
-             dictionary values are converted to JSON strings. If JSON parsing fails,
-             returns the original args_buffer unchanged. For other models, returns
-             the original args_buffer.
-    Example:
-        >>> input_json = '{"content": {"code": "print('hello')"}, "type": "code"}'
-        >>> fix_qwen3_coder_json(input_json, "qwen3_coder")
-        '{"content": "\\"{\\\\"code\\\\": \\\\"print('hello')\\\\"}\\"", "type": "code"}'
-    """
-
-    if "qwen3_coder" in model_name.lower().replace("-", "_"):
-        try:
-            args_buffer_loads = json.loads(args_buffer)
-            if isinstance(args_buffer_loads, dict):
-                for key, value in args_buffer_loads.items():
-                    if isinstance(value, dict) or isinstance(value, list):
-                        args_buffer_loads[key] = json.dumps(value)
-                    elif tool_call and tool_call.get("name") == "Write":
-                        args_buffer_loads[key] = json.dumps(value, ensure_ascii=False)
-            return json.dumps(args_buffer_loads, ensure_ascii=False)
-        except json.JSONDecodeError:
-            return args_buffer
-    return args_buffer
-
 
 async def convert_openai_to_claude_response(
     openai_response: dict, original_request: ClaudeMessagesRequest, request_id: str
@@ -421,32 +386,8 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
                                 # Try to parse complete JSON and send delta when we have valid JSON
                                 try:
-                                    args_buffer_loads = json.loads(
+                                    json.loads(
                                         tool_call["args_buffer"]
-                                    )
-
-                                    # FIXME bug fix for qwen3-coder, it will deserialize the JSON value, which should keep the original JSON string
-                                    if (
-                                        "qwen3_coder"
-                                        in openai_request.get("model", "")
-                                        .lower()
-                                        .replace("-", "_")
-                                        and tool_call.get("name") == "Write"
-                                    ):
-                                        if isinstance(args_buffer_loads, dict):
-                                            for key, value in args_buffer_loads.items():
-                                                if isinstance(
-                                                    value, dict
-                                                ) or isinstance(value, list):
-                                                    args_buffer_loads[key] = json.dumps(
-                                                        value
-                                                    )
-                                                # elif key == "content" and tool_call.get("name") == "Write" and not value.startswith("\""):
-                                                #     args_buffer_loads[key] = json.dumps(value, ensure_ascii=False)
-                                        finish_reason = "tool_calls"  # Ensure we handle tool calls correctly
-
-                                    tool_call["args_buffer"] = json.dumps(
-                                        args_buffer_loads, ensure_ascii=False
                                     )
                                     # logger.info(f"Tool call args buffer: {tool_call['args_buffer']}")
 
