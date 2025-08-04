@@ -17,7 +17,7 @@ class WebSocketManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.connections.append(websocket)
-        logger.info(
+        logger.debug(
             f"WebSocket client connected. Total connections: {len(self.connections)}"
         )
         await self.broadcast(
@@ -33,7 +33,7 @@ class WebSocketManager:
     def disconnect(self, websocket: WebSocket):
         if websocket in self.connections:
             self.connections.remove(websocket)
-        logger.info(
+        logger.debug(
             f"WebSocket client disconnected. Total connections: {len(self.connections)}"
         )
 
