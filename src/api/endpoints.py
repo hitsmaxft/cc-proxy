@@ -3,13 +3,12 @@ from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 # Import aiohttp for making the request
-import requests
 from datetime import datetime
 import uuid
 from typing import Optional
 from pydantic import BaseModel
 
-from src.core.config import config
+from src.core.config import config, SrcDir    
 from src.core.logging import logger
 from src.core.client import OpenAIClient
 from src.models.claude import ClaudeMessagesRequest, ClaudeTokenCountRequest
@@ -25,7 +24,7 @@ from src.api.websocket_manager import broadcast_model_update, broadcast_history_
 router = APIRouter()
 
 # Setup Jinja2 templates
-templates = Jinja2Templates(directory="src/assets")
+templates = Jinja2Templates(directory=f"{SrcDir}/src/assets")
 
 openai_client = OpenAIClient(
     config.openai_api_key,

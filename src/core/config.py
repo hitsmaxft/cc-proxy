@@ -1,10 +1,7 @@
-import json
 import os
 import sys
-import asyncio
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List,  TypedDict
 import toml
-
 
 class ModelProvider(TypedDict):
     name: str
@@ -162,3 +159,9 @@ def init_config(config_file: str):
         config.init_toml()
         print(f" Configuration loaded: providers={config.provider_names}")
     return config
+    
+SrcDir= os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+if __name__ == "__main__":
+    print(SrcDir)
