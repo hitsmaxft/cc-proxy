@@ -10,7 +10,6 @@ import sys
 import argparse
 import os
 import logging
-from dotenv import load_dotenv
 from src.core.config import config, Config
 
 
@@ -41,31 +40,15 @@ def main():
         logging.getLogger(logger_name).disabled = True
 
     parser = argparse.ArgumentParser(description="Claude-to-OpenAI API Proxy v1.0.0")
-    parser.add_argument("--env", help="Path to .env file", default=".env", type=str)
-    parser.add_argument("--conf", help="Path to config toml file", type=str)
+    parser.add_argument("--conf", help="Path to config toml file", required=True, type=str)
     parser.add_argument("--log", help="enable access_log", default=False)
     args = parser.parse_args()
 
     from src.core.config import init_config
 
     global config
-    # Load environment variables from specified file
-    if not args.conf:
-        if os.path.exists(args.env):
-            default_provider = os.path.splitext(os.path.basename(args.env))[0]
-            load_dotenv(args.env)
-            print(f"✅ Loaded environment from: {args.env}")
-            if not "DB_FILE" in os.environ:
-                os.environ["DB_FILE"] = f"{default_provider}.db"
-        elif args.env != ".env":
-            print(f"⚠️ Warning: Specified env file not found: {args.env}")
-            os.environ["DB_FILE"] = "proxy.db"
-        print(f"✅ Loaded db from: {os.environ['DB_FILE']}")
-        # Reinitialize config after loading env
-        config = init_config()
-    else:
-        print(f"✅ Loaded toml config from: {args.conf}")
-        config = init_config(config_file=args.conf)
+    print(f"✅ Loading TOML config from: {args.conf}")
+    config = init_config(config_file=args.conf)
 
     # Load model configuration from database
     import asyncio
@@ -73,42 +56,41 @@ def main():
     try:
         # Run async database loading function
         asyncio.run(
-            config.load_model_config_from_db(os.environ.get("DB_FILE", "proxy.db"))
+            config.load_model_config_from_db()
         )
     except Exception as e:
         print(f"⚠️  Warning: Could not load model configuration from database: {e}")
 
-    # Keep the old help logic for backward compatibility
+    # Help logic
     if "--help" in sys.argv:
         print("Claude-to-OpenAI API Proxy v1.0.0")
         print("")
-        print("Usage: python src/main.py")
+        print("Usage: python src/main.py --conf CONFIG_FILE")
         print("")
-        print("Required environment variables:")
-        print("  OPENAI_API_KEY - Your OpenAI API key")
+        print("Required arguments:")
+        print("  --conf PATH - Path to TOML configuration file")
         print("")
-        print("Optional environment variables:")
-        print("  ANTHROPIC_API_KEY - Expected Anthropic API key for client validation")
-        print("                      If set, clients must provide this exact API key")
-        print(
-            f"  OPENAI_BASE_URL - OpenAI API base URL (default: https://api.openai.com/v1)"
-        )
-        print(f"  BIG_MODEL - Model for opus requests (default: gpt-4o)")
-        print(f"  MIDDLE_MODEL - Model for sonnet requests (default: gpt-4o)")
-        print(f"  SMALL_MODEL - Model for haiku requests (default: gpt-4o-mini)")
-        print(f"  HOST - Server host (default: 0.0.0.0)")
-        print(f"  PORT - Server port (default: 8082)")
-        print(f"  LOG_LEVEL - Logging level (default: WARNING)")
-        print(f"  MAX_TOKENS_LIMIT - Token limit (default: 4096)")
-        print(f"  MIN_TOKENS_LIMIT - Minimum token limit (default: 100)")
-        print(f"  REQUEST_TIMEOUT - Request timeout in seconds (default: 90)")
+        print("Configuration file format (TOML):")
+        print("  [config]")
+        print("  port = 8082")
+        print("  host = \"0.0.0.0\"")
+        print("  log_level = \"INFO\"")
+        print("  big_model = \"gpt-4o\"")
+        print("  middle_model = \"gpt-4o\"") 
+        print("  small_model = \"gpt-4o-mini\"")
         print("")
-        print("Command line options:")
-        print("  --env PATH - Path to .env file (default: .env)")
+        print("  [[provider]]")
+        print("  name = \"OpenAI\"")
+        print("  base_url = \"https://api.openai.com/v1\"")
+        print("  api_key = \"your-api-key\"")
+        print("  big_models = [\"gpt-4o\"]")
+        print("  middle_models = [\"gpt-4o\"]")
+        print("  small_models = [\"gpt-4o-mini\"]")
         print("")
         print("Model mapping:")
         print(f"  Claude haiku models -> {config.small_model}")
-        print(f"  Claude sonnet/opus models -> {config.big_model}")
+        print(f"  Claude sonnet models -> {config.middle_model}")  
+        print(f"  Claude opus models -> {config.big_model}")
         sys.exit(0)
 
     # Configuration summary

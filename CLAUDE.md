@@ -50,12 +50,10 @@ uv run mypy src/
 # With Justfile (recommended)
 just load                          # Default config ($HOME/.config/claude-code-proxy/providers.toml)
 just load_toml /path/to/config.toml  # Custom TOML config
-just start_conf .env               # Environment file
 
 # Direct commands
-python start_proxy.py
+python start_proxy.py --conf /path/to/config.toml
 uv run claude-code-proxy --conf /path/to/config.toml
-uv run claude-code-proxy --env .env
 ```
 
 ### Testing
@@ -72,15 +70,7 @@ python tests/test_main.py
 ```
 
 ### Configuration Examples
-```bash
-# Environment variables
-OPENAI_API_KEY="sk-your-key"
-OPENAI_BASE_URL="https://api.openai.com/v1"
-BIG_MODEL="gpt-4o"
-MIDDLE_MODEL="gpt-4o"
-SMALL_MODEL="gpt-4o-mini"
-PORT=8082
-
+```toml
 # TOML config (providers.toml)
 [config]
 port = 8082

@@ -1,9 +1,6 @@
 list:
     @just --list
 
-start_conf _file args='':
-    #!/usr/bin/env bash
-    uv run  cc-proxy  --env {{_file}} {{args}}
 
 
 updatedeps:

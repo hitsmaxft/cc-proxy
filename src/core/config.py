@@ -65,74 +65,6 @@ class Config:
         print("loaded middle_models:", self.middle_models)
         print("loaded small_models:", self.small_models)
 
-    def load_env(self):
-        self.openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not self.openai_api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
-
-        # Add Anthropic API key for client validation
-        self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not self.anthropic_api_key:
-            print(
-                "Warning: ANTHROPIC_API_KEY not set. Client API key validation will be disabled."
-            )
-
-        self.openai_base_url = os.environ.get(
-            "OPENAI_BASE_URL", "https://api.openai.com/v1"
-        )
-        self.azure_api_version = os.environ.get("AZURE_API_VERSION")  # For Azure OpenAI
-        self.host = os.environ.get("HOST", "0.0.0.0")
-        self.port = int(os.environ.get("PORT", "8082"))
-        self.log_level = os.environ.get("LOG_LEVEL", "INFO")
-        self.max_tokens_limit = int(os.environ.get("MAX_TOKENS_LIMIT", "4096"))
-        self.min_tokens_limit = int(os.environ.get("MIN_TOKENS_LIMIT", "100"))
-        self.db_file = os.environ.get("DB_FILE", "cc.db")
-
-        # Connection settings
-        self.request_timeout = int(os.environ.get("REQUEST_TIMEOUT", "90"))
-        self.max_retries = int(os.environ.get("MAX_RETRIES", "2"))
-
-        # Model settings - BIG and SMALL models
-        # Available model lists for CLI
-        self.big_models = [
-            m.strip()
-            for m in os.environ.get(
-                "BIG_MODELS", os.environ.get("BIG_MODEL", "gpt-4o")
-            ).split(",")
-        ]
-        self.middle_models = [
-            m.strip()
-            for m in os.environ.get(
-                "MIDDLE_MODELS", os.environ.get("MIDDLE_MODEL", self.big_models)
-            ).split(",")
-        ]
-        self.small_models = [
-            m.strip()
-            for m in os.environ.get(
-                "SMALL_MODELS", os.environ.get("SMALL_MODEL", "gpt-4o-mini")
-            ).split(",")
-        ]
-
-        self.big_model = self.big_models[0]
-        self.middle_model = self.middle_models[0]
-        self.small_model = self.small_models[0]
-        self.model_provders = {}
-
-        self.web_search = os.environ.get("WEB_SEARCH")  # For Azure OpenAI
-
-        self.load_providers(
-            [
-                ModelProvider(
-                    name="default",
-                    base_url=self.openai_base_url,
-                    api_key=self.openai_api_key,
-                    big_models=self.big_models,
-                    middle_models=self.middle_models,
-                    small_models=self.small_models,
-                )
-            ]
-        )
-
     def validate_api_key(self):
         """Basic API key validation"""
         if not self.openai_api_key:
@@ -212,31 +144,21 @@ class Config:
 config = None
 
 
-def init_config(config_file: Optional[str] = None):
-    """Initialize global config instance"""
+def init_config(config_file: str):
+    """Initialize global config instance from TOML file"""
 
     global config
-    if config_file:
-        print(f"load toml config from {config_file}")
-        with open(config_file, "r") as f:
-            data = toml.load(f)
-            config = Config()
-            for key, value in data.items():
-                setattr(config, key, value)
-            for k, v in data.get("config", {}).items():
-                os.environ[k] = "v"
-            config.init_toml()
-            print(f" Configuration loaded: providers={config.provider_names}")
-
-    else:
-        try:
-            config = Config()
-            config.load_env()
-            print(
-                f" Configuration loaded: API_KEY={'*' * 20}..., BASE_URL='{config.openai_base_url}'"
-            )
-            return config
-        except Exception as e:
-            print(f"=4 Configuration Error: {e}")
-            sys.exit(1)
+    if not config_file:
+        raise ValueError("TOML configuration file is required")
+    
+    print(f"load toml config from {config_file}")
+    with open(config_file, "r") as f:
+        data = toml.load(f)
+        config = Config()
+        for key, value in data.items():
+            setattr(config, key, value)
+        for k, v in data.get("config", {}).items():
+            os.environ[k] = "v"
+        config.init_toml()
+        print(f" Configuration loaded: providers={config.provider_names}")
     return config

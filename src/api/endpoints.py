@@ -20,13 +20,9 @@ from src.conversion.response_converter import (
 )
 from src.core.model_manager import model_manager
 from src.services.history_manager import history_manager
-from src.storage.database import MessageHistoryDatabase
 from src.api.websocket_manager import broadcast_model_update, broadcast_history_update
 
 router = APIRouter()
-
-# Initialize database
-config_db = MessageHistoryDatabase()
 
 # Setup Jinja2 templates
 templates = Jinja2Templates(directory="src/assets")
@@ -389,7 +385,7 @@ async def update_config(request: ConfigUpdateRequest):
             config.small_model = request.SMALL_MODEL
 
         # Save to database
-        await config_db.save_model_config(
+        await history_manager.get_db().save_model_config(
             config.big_model, config.middle_model, config.small_model
         )
 

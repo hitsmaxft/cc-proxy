@@ -20,6 +20,10 @@ class HistoryManager:
         message_db = MessageHistoryDatabase(config.db_file)
         self.database = message_db
 
+    def get_db(self) -> MessageHistoryDatabase:
+        """Get the current database instance"""
+        return self.database
+
     async def log_request(
         self,
         request_id: str,

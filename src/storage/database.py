@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import os
+import platform
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -11,11 +12,57 @@ from contextlib import asynccontextmanager
 from src.core.logging import logger
 
 
+def get_app_data_dir() -> Path:
+    """Get the appropriate application data directory for the current OS"""
+    app_name = "ccproxy"
+    home = Path.home()
+    
+    system = platform.system().lower()
+    
+    if system == "darwin":  # macOS
+        return home / "Library" / "Application Support" / app_name
+    elif system == "windows":
+        # Try APPDATA first, fallback to LOCALAPPDATA
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / app_name
+        localappdata = os.environ.get("LOCALAPPDATA")
+        if localappdata:
+            return Path(localappdata) / app_name
+        # Fallback to user profile
+        return home / "AppData" / "Roaming" / app_name
+    else:  # Linux/Unix
+        # Follow XDG Base Directory specification
+        xdg_data_home = os.environ.get("XDG_DATA_HOME")
+        if xdg_data_home:
+            return Path(xdg_data_home) / app_name
+        return home / ".local" / "share" / app_name
+
+
 class MessageHistoryDatabase:
     """SQLite database manager for message history storage"""
 
     def __init__(self, db_path: str = "proxy.db"):
-        self.db_path = db_path
+        # Check if db_path is just a filename (no directory separators)
+        if os.path.basename(db_path) == db_path:
+            # Just a filename, use app data directory
+            app_data_dir = get_app_data_dir()
+            self.db_path = str(app_data_dir / db_path)
+        elif not os.path.isabs(db_path):
+            # Relative path, convert to absolute
+            self.db_path = os.path.abspath(db_path)
+        else:
+            # Already absolute path
+            self.db_path = db_path
+
+        print("use data path:", self.db_path)
+        
+        # Create parent directory if it doesn't exist
+        parent_dir = os.path.dirname(self.db_path)
+        if parent_dir and not os.path.exists(parent_dir):
+            os.makedirs(parent_dir, exist_ok=True)
+            logger.info(f"Created database directory: {parent_dir}")
+            
         self._initialized = False
 
     async def initialize(self):

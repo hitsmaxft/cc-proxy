@@ -74,6 +74,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python312;
+        inherit (pkgs.callPackages pyproject-nix.build.util { }) mkApplication;
 
         # Move the pythonSet definition here
         pythonSet = (pkgs.callPackage pyproject-nix.build.packages {
@@ -85,12 +86,17 @@
             pyprojectOverrides
           ]
         );
+        virtualenv = pythonSet.mkVirtualEnv "cc-proxy-env" workspace.deps.default;
       in {
-        packages.default = pythonSet.mkVirtualEnv "cc-proxy-env" workspace.deps.default;
+        packages.default = mkApplication {
+          venv = virtualenv;
+          package = builtins.trace (builtins.attrNames  pythonSet) pythonSet.cc-proxy;
+        };
+
 
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/hello";
+          program = "${self.packages.${system}.default}/bin/cc-proxy";
         };
 
         devShells = {
