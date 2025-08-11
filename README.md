@@ -43,14 +43,7 @@ pip install -r requirements.txt
 
 ### 2. Configure
 
-#### Option A: Environment Variables (.env file)
-
-```bash
-cp .env.example .env
-# Edit .env and add your API configuration
-```
-
-#### Option B: TOML Configuration File
+#### TOML Configuration File
 
 Create a configuration file (e.g., `providers.toml`) with your settings:
 
@@ -88,9 +81,6 @@ just load
 # Start with custom TOML config file
 just load_toml path/to/your/config.toml
 
-# Start with environment file
-just start_conf .env
-
 # List all available commands
 just list
 ```
@@ -98,17 +88,15 @@ just list
 #### Direct Commands
 
 ```bash
-# Direct run
+# Direct run with default config
 python start_proxy.py
 
 # Or with UV
 uv run claude-code-proxy
 
-# With custom config file
+# With custom TOML config file
 uv run claude-code-proxy --conf path/to/config.toml
-
-# With environment file
-uv run claude-code-proxy --env .env
+python start_proxy.py --conf path/to/config.toml
 ```
 
 ### 4. Use with Claude Code
@@ -123,84 +111,123 @@ ANTHROPIC_BASE_URL=http://localhost:8082 ANTHROPIC_API_KEY="exact-matching-key" 
 
 ## Configuration
 
-### Environment Variables
+CC-Proxy now uses **TOML configuration files only**. All configuration must be specified in a TOML file.
 
-**Required:**
+### TOML Configuration Structure
 
-- `OPENAI_API_KEY` - Your API key for the target provider
+```toml
+[config]
+port = 8082
+anthropic_api_key = ""  # Optional: for client validation
+log_level = "INFO"
+big_model = "gpt-4o"
+middle_model = "gpt-4o"
+small_model = "gpt-4o-mini"
+max_tokens_limit = 4096
+request_timeout = 90
+
+[[provider]]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+api_key = "your-api-key"
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+```
+
+### Configuration Options
+
+**Server Settings:**
+- `port` - Server port (default: `8082`)
+- `log_level` - Logging level (default: `WARNING`)
+- `max_tokens_limit` - Token limit (default: `4096`)
+- `request_timeout` - Request timeout in seconds (default: `90`)
 
 **Security:**
-
-- `ANTHROPIC_API_KEY` - Expected Anthropic API key for client validation
+- `anthropic_api_key` - Expected Anthropic API key for client validation
   - If set, clients must provide this exact API key to access the proxy
   - If not set, any API key will be accepted
 
 **Model Configuration:**
+- `big_model` - Model for Claude opus requests (default: `gpt-4o`)
+- `middle_model` - Model for Claude sonnet requests (default: `gpt-4o`)
+- `small_model` - Model for Claude haiku requests (default: `gpt-4o-mini`)
 
-- `BIG_MODEL` - Model for Claude opus requests (default: `gpt-4o`)
-- `MIDDLE_MODEL` - Model for Claude opus requests (default: `gpt-4o`)
-- `SMALL_MODEL` - Model for Claude haiku requests (default: `gpt-4o-mini`)
-
-**API Configuration:**
-
-- `OPENAI_BASE_URL` - API base URL (default: `https://api.openai.com/v1`)
-
-**Server Settings:**
-
-- `HOST` - Server host (default: `0.0.0.0`)
-- `PORT` - Server port (default: `8082`)
-- `LOG_LEVEL` - Logging level (default: `WARNING`)
-
-**Performance:**
-
-- `MAX_TOKENS_LIMIT` - Token limit (default: `4096`)
-- `REQUEST_TIMEOUT` - Request timeout in seconds (default: `90`)
+**Provider Configuration:**
+- `name` - Provider identifier
+- `base_url` - API base URL
+- `api_key` - API key for the provider
+- `big_models`, `middle_models`, `small_models` - Available models for each tier
 
 ### Model Mapping
 
 The proxy maps Claude model requests to your configured models:
 
-| Claude Request                 | Mapped To     | Environment Variable   |
-| ------------------------------ | ------------- | ---------------------- |
-| Models with "haiku"            | `SMALL_MODEL` | Default: `gpt-4o-mini` |
-| Models with "sonnet"           | `MIDDLE_MODEL`| Default: `BIG_MODEL`   |
-| Models with "opus"             | `BIG_MODEL`   | Default: `gpt-4o`      |
+| Claude Request                 | Mapped To     | Default Model      |
+| ------------------------------ | ------------- | ------------------ |
+| Models with "haiku"            | `small_model` | `gpt-4o-mini`     |
+| Models with "sonnet"           | `middle_model`| `gpt-4o`          |
+| Models with "opus"             | `big_model`   | `gpt-4o`          |
 
 ### Provider Examples
 
 #### OpenAI
 
-```bash
-OPENAI_API_KEY="sk-your-openai-key"
-OPENAI_BASE_URL="https://api.openai.com/v1"
-BIG_MODEL="gpt-4o"
-MIDDLE_MODEL="gpt-4o"
-SMALL_MODEL="gpt-4o-mini"
+```toml
+[config]
+port = 8082
+big_model = "gpt-4o"
+middle_model = "gpt-4o"
+small_model = "gpt-4o-mini"
+
+[[provider]]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+api_key = "sk-your-openai-key"
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
 ```
 
 #### Azure OpenAI
 
-```bash
-OPENAI_API_KEY="your-azure-key"
-OPENAI_BASE_URL="https://your-resource.openai.azure.com/openai/deployments/your-deployment"
-BIG_MODEL="gpt-4"
-MIDDLE_MODEL="gpt-4"
-SMALL_MODEL="gpt-35-turbo"
+```toml
+[config]
+port = 8082
+big_model = "gpt-4"
+middle_model = "gpt-4"
+small_model = "gpt-35-turbo"
+
+[[provider]]
+name = "Azure"
+base_url = "https://your-resource.openai.azure.com/openai/deployments/your-deployment"
+api_key = "your-azure-key"
+big_models = ["gpt-4"]
+middle_models = ["gpt-4"]
+small_models = ["gpt-35-turbo"]
 ```
 
 #### Local Models (Ollama)
 
-```bash
-OPENAI_API_KEY="dummy-key"  # Required but can be dummy
-OPENAI_BASE_URL="http://localhost:11434/v1"
-BIG_MODEL="llama3.1:70b"
-MIDDLE_MODEL="llama3.1:70b"
-SMALL_MODEL="llama3.1:8b"
+```toml
+[config]
+port = 8082
+big_model = "llama3.1:70b"
+middle_model = "llama3.1:70b"
+small_model = "llama3.1:8b"
+
+[[provider]]
+name = "Ollama"
+base_url = "http://localhost:11434/v1"
+api_key = "dummy-key"  # Required but can be dummy
+big_models = ["llama3.1:70b"]
+middle_models = ["llama3.1:70b"]
+small_models = ["llama3.1:8b"]
 ```
 
 #### Other Providers
 
-Any OpenAI-compatible API can be used by setting the appropriate `OPENAI_BASE_URL`.
+Any OpenAI-compatible API can be used by setting the appropriate `base_url` in the provider configuration.
 
 ## Usage Examples
 

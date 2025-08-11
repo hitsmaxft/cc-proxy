@@ -435,6 +435,10 @@ async def convert_openai_streaming_to_claude_with_cancellation(
             yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
             return
         else:
+            error_event = {
+                "type": "error",
+                "error": {"type": "api_error", "message": f"Streaming error: {str(e)}"},
+            }
             await history_manager.log_response(
                 request_id=request_id,
                 response_data={"status_code": e.status_code, "error": error_event},
