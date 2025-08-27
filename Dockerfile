@@ -7,4 +7,4 @@ ADD . /app
 WORKDIR /app
 RUN uv sync --locked
 
-CMD ["uv", "run", "start_proxy.py"]
+CMD ["uv", "run", "cc-proxy", "--conf", "/app/providers.toml"]
