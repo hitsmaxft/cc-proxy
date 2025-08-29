@@ -3,8 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: uv run cc-proxy --host "0.0.0.0" --conf /app/providers.toml
     ports:
       - 8086:8086
     volumes:
       - ./providers.toml:/app/providers.toml
-      - ./__db:/root/.local/share/ccproxy/
+      - ./proxy.db:/root/.local/share/ccproxy/proxy.db

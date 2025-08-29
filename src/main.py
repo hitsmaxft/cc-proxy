@@ -41,6 +41,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="Claude-to-OpenAI API Proxy v1.0.0")
     parser.add_argument("--conf", help="Path to config toml file", required=True, type=str)
+    parser.add_argument("--host", help="override host in config", required=False, type=str)
+    parser.add_argument("--port", help="override port in config", required=False, type=int)
     parser.add_argument("--log", help="enable access_log", default=False)
     args = parser.parse_args()
 
@@ -152,8 +154,8 @@ def main():
     # Start server
     uvicorn.run(
         app,
-        host=config.host,
-        port=config.port,
+        host=args.host or config.host,
+        port=args.port or config.port,
         log_level=log_level,
         reload=False,
         access_log=args.log,
