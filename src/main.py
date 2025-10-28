@@ -40,9 +40,15 @@ def main():
         logging.getLogger(logger_name).disabled = True
 
     parser = argparse.ArgumentParser(description="Claude-to-OpenAI API Proxy v1.0.0")
-    parser.add_argument("--conf", help="Path to config toml file", required=True, type=str)
-    parser.add_argument("--host", help="override host in config", required=False, type=str)
-    parser.add_argument("--port", help="override port in config", required=False, type=int)
+    parser.add_argument(
+        "--conf", help="Path to config toml file", required=True, type=str
+    )
+    parser.add_argument(
+        "--host", help="override host in config", required=False, type=str
+    )
+    parser.add_argument(
+        "--port", help="override port in config", required=False, type=int
+    )
     parser.add_argument("--log", help="enable access_log", default=False)
     args = parser.parse_args()
 
@@ -52,14 +58,17 @@ def main():
     print(f"✅ Loading TOML config from: {args.conf}")
     config = init_config(config_file=args.conf)
 
+    if args.host:
+        config.host = args.host
+    if args.port:
+        config.port = args.port
+
     # Load model configuration from database
     import asyncio
 
     try:
         # Run async database loading function
-        asyncio.run(
-            config.load_model_config_from_db()
-        )
+        asyncio.run(config.load_model_config_from_db())
     except Exception as e:
         print(f"⚠️  Warning: Could not load model configuration from database: {e}")
 
@@ -75,23 +84,23 @@ def main():
         print("Configuration file format (TOML):")
         print("  [config]")
         print("  port = 8082")
-        print("  host = \"0.0.0.0\"")
-        print("  log_level = \"INFO\"")
-        print("  big_model = \"gpt-4o\"")
-        print("  middle_model = \"gpt-4o\"") 
-        print("  small_model = \"gpt-4o-mini\"")
+        print('  host = "0.0.0.0"')
+        print('  log_level = "INFO"')
+        print('  big_model = "gpt-4o"')
+        print('  middle_model = "gpt-4o"')
+        print('  small_model = "gpt-4o-mini"')
         print("")
         print("  [[provider]]")
-        print("  name = \"OpenAI\"")
-        print("  base_url = \"https://api.openai.com/v1\"")
-        print("  api_key = \"your-api-key\"")
-        print("  big_models = [\"gpt-4o\"]")
-        print("  middle_models = [\"gpt-4o\"]")
-        print("  small_models = [\"gpt-4o-mini\"]")
+        print('  name = "OpenAI"')
+        print('  base_url = "https://api.openai.com/v1"')
+        print('  api_key = "your-api-key"')
+        print('  big_models = ["gpt-4o"]')
+        print('  middle_models = ["gpt-4o"]')
+        print('  small_models = ["gpt-4o-mini"]')
         print("")
         print("Model mapping:")
         print(f"  Claude haiku models -> {config.small_model}")
-        print(f"  Claude sonnet models -> {config.middle_model}")  
+        print(f"  Claude sonnet models -> {config.middle_model}")
         print(f"  Claude opus models -> {config.big_model}")
         sys.exit(0)
 
