@@ -8,7 +8,7 @@ import uuid
 from typing import Optional
 from pydantic import BaseModel
 
-from src.core.config import config, SrcDir    
+from src.core.config import config, SrcDir,ASSETS_DIR    
 from src.core.logging import logger
 from src.core.client import OpenAIClient
 from src.models.claude import ClaudeMessagesRequest, ClaudeTokenCountRequest
@@ -21,10 +21,11 @@ from src.core.model_manager import model_manager
 from src.services.history_manager import history_manager
 from src.api.websocket_manager import broadcast_model_update, broadcast_history_update
 
+
 router = APIRouter()
 
 # Setup Jinja2 templates
-templates = Jinja2Templates(directory=f"{SrcDir}/src/assets")
+templates = Jinja2Templates(directory=f"{SrcDir}/assets")
 
 openai_client = OpenAIClient(
     config.openai_api_key,
@@ -290,7 +291,7 @@ async def assets_styles_css():
     from fastapi.responses import FileResponse
     import os
 
-    app_styles_path = os.path.join("src", "assets", "styles.css")
+    app_styles_path = ASSETS_DIR / "styles.css"
     return FileResponse(app_styles_path, media_type="text/css")
 
 
@@ -301,7 +302,7 @@ async def assets_app_js(app: str):
     from fastapi.responses import FileResponse
     import os
 
-    app_js_path = os.path.join("src", "assets", f"{app}.js")
+    app_js_path = ASSETS_DIR / f"{app}.js"
     if not os.path.exists(app_js_path):
         raise HTTPException(status_code=404, detail=f"{app}.js not found")
     return FileResponse(app_js_path, media_type="application/javascript")

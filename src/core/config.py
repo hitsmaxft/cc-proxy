@@ -1,6 +1,8 @@
 import os
 import sys
 from typing import Any, Dict, List,  TypedDict
+from pathlib import Path
+
 import toml
 
 class ModelProvider(TypedDict):
@@ -160,8 +162,12 @@ def init_config(config_file: str):
         print(f" Configuration loaded: providers={config.provider_names}")
     return config
     
-SrcDir= os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+## src root
+SrcDir= os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+##
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 
 
 if __name__ == "__main__":
     print(SrcDir)
+    print(ASSETS_DIR)
