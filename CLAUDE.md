@@ -70,6 +70,8 @@ python tests/test_main.py
 ```
 
 ### Configuration Examples
+
+#### Basic Configuration with Direct API Keys
 ```toml
 # TOML config (providers.toml)
 [config]
@@ -82,9 +84,68 @@ small_model = "gpt-4o-mini"
 [[provider]]
 name = "OpenAI"
 base_url = "https://api.openai.com/v1"
-api_key = "your-api-key"
+api_key = "your-api-key"  # Direct API key (not recommended for production)
 big_models = ["gpt-4o"]
 middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+```
+
+#### Secure Configuration with Environment Variables (Recommended)
+```toml
+# TOML config (providers.toml) - Secure approach
+[config]
+port = 8082
+log_level = "INFO"
+big_model = "gpt-4o"
+middle_model = "gpt-4o"
+small_model = "gpt-4o-mini"
+
+[[provider]]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_API_KEY"  # Load API key from environment variable
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+
+[[provider]]
+name = "Azure-OpenAI"
+base_url = "https://your-resource.openai.azure.com/openai/deployments/your-deployment"
+env_key = "AZURE_OPENAI_API_KEY"  # Each provider can use different env vars
+big_models = ["gpt-4"]
+middle_models = ["gpt-4"]
+small_models = ["gpt-35-turbo"]
+```
+
+#### Setting Environment Variables
+```bash
+# Set environment variables before starting the proxy
+export OPENAI_API_KEY="sk-your-actual-openai-key"
+export AZURE_OPENAI_API_KEY="your-azure-key"
+
+# Then start the proxy
+just load_toml /path/to/your/config.toml
+```
+
+#### Mixed Configuration
+```toml
+# You can mix direct keys and environment variables
+# Note: env_key takes priority over api_key if both are specified
+
+[[provider]]
+name = "OpenAI-Prod"
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_PROD_KEY"  # Uses environment variable (recommended)
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+
+[[provider]]
+name = "OpenAI-Dev"
+base_url = "https://api.openai.com/v1"
+api_key = "sk-dev-test-key"  # Direct key for development only
+big_models = ["gpt-4o-mini"]
+middle_models = ["gpt-4o-mini"]
 small_models = ["gpt-4o-mini"]
 ```
 
@@ -129,6 +190,7 @@ Transformers in `src/conversion/transformer/` provide provider-specific customiz
 - Token usage visualization
 
 ### Security & Validation
+- **API Key Security**: Support for environment variables via `env_key` to avoid storing sensitive keys in configuration files
 - **API Key Validation**: Optional `ANTHROPIC_API_KEY` for client validation
 - **Model Selection**: Dynamic model switching via web UI
 - **Rate Limiting**: Configurable timeouts and retries

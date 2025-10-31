@@ -48,7 +48,7 @@ pip install -r requirements.txt
 Create a configuration file (e.g., `providers.toml`) with your settings:
 
 ```toml
-# Example providers.toml
+# Example providers.toml - Secure Configuration
 [config]
 port = 8082
 anthropic_api_key = ""
@@ -60,10 +60,15 @@ small_model = "gpt-4o-mini"
 [[provider]]
 name = "OpenAI"
 base_url = "https://api.openai.com/v1"
-api_key = "your-api-key"
+env_key = "OPENAI_API_KEY"  # Secure: Load API key from environment
 big_models = ["gpt-4o"]
 middle_models = ["gpt-4o"]
 small_models = ["gpt-4o-mini"]
+```
+
+Set your environment variable before starting:
+```bash
+export OPENAI_API_KEY="sk-your-actual-openai-key"
 ```
 
 **Configuration File Locations:**
@@ -129,7 +134,8 @@ request_timeout = 90
 [[provider]]
 name = "OpenAI"
 base_url = "https://api.openai.com/v1"
-api_key = "your-api-key"
+env_key = "OPENAI_API_KEY"  # Recommended: Load API key from environment
+# api_key = "your-api-key"  # Alternative: Direct API key (not recommended)
 big_models = ["gpt-4o"]
 middle_models = ["gpt-4o"]
 small_models = ["gpt-4o-mini"]
@@ -156,8 +162,11 @@ small_models = ["gpt-4o-mini"]
 **Provider Configuration:**
 - `name` - Provider identifier
 - `base_url` - API base URL
-- `api_key` - API key for the provider
+- `api_key` - API key for the provider (not recommended for production)
+- `env_key` - Name of environment variable containing the API key (recommended for security)
 - `big_models`, `middle_models`, `small_models` - Available models for each tier
+
+**Note:** Use `env_key` instead of `api_key` for better security. If both are specified, `env_key` takes priority.
 
 ### Model Mapping
 
@@ -171,7 +180,7 @@ The proxy maps Claude model requests to your configured models:
 
 ### Provider Examples
 
-#### OpenAI
+#### OpenAI (Secure Configuration - Recommended)
 
 ```toml
 [config]
@@ -183,7 +192,25 @@ small_model = "gpt-4o-mini"
 [[provider]]
 name = "OpenAI"
 base_url = "https://api.openai.com/v1"
-api_key = "sk-your-openai-key"
+env_key = "OPENAI_API_KEY"  # Load API key from environment variable
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+```
+
+Set the environment variable before starting:
+```bash
+export OPENAI_API_KEY="sk-your-actual-openai-key"
+just load_toml /path/to/your/config.toml
+```
+
+#### OpenAI (Direct API Key - Development Only)
+
+```toml
+[[provider]]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+api_key = "sk-your-openai-key"  # Not recommended for production
 big_models = ["gpt-4o"]
 middle_models = ["gpt-4o"]
 small_models = ["gpt-4o-mini"]
@@ -201,10 +228,15 @@ small_model = "gpt-35-turbo"
 [[provider]]
 name = "Azure"
 base_url = "https://your-resource.openai.azure.com/openai/deployments/your-deployment"
-api_key = "your-azure-key"
+env_key = "AZURE_OPENAI_API_KEY"  # Secure: load from environment
 big_models = ["gpt-4"]
 middle_models = ["gpt-4"]
 small_models = ["gpt-35-turbo"]
+```
+
+Set the environment variable:
+```bash
+export AZURE_OPENAI_API_KEY="your-actual-azure-key"
 ```
 
 #### Local Models (Ollama)

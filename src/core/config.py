@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, Dict, List,  TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 from pathlib import Path
 
 import toml
@@ -8,7 +8,8 @@ import toml
 class ModelProvider(TypedDict):
     name: str
     base_url: str
-    api_key: str
+    api_key: Optional[str]
+    env_key: Optional[str]
     big_models: List[str]
     middle_models: List[str]
     small_models: List[str]
@@ -53,16 +54,59 @@ class Config:
 
     def load_providers(self, provider: List[Dict[str, Any]]):
         self.provider_names = [x["name"] for x in provider]
-        self.provider = provider
 
-        for provider in provider:
-            print(f"add provider {provider['name']}")
+        # Process each provider and resolve API keys from environment if needed
+        processed_providers = []
+        for p in provider:
+            # Validate provider configuration first
+            if not self.validate_provider_config(p):
+                continue
+
+            provider_copy = p.copy()
+
+            # Handle API key resolution (env_key takes priority over api_key)
+            if "env_key" in p and p["env_key"]:
+                # Load API key from environment variable
+                env_var_name = p["env_key"]
+                api_key = os.getenv(env_var_name)
+                if api_key:
+                    provider_copy["api_key"] = api_key
+                    print(f"add provider {p['name']} (API key loaded from env: {env_var_name})")
+                else:
+                    print(f"❌ Error: Environment variable '{env_var_name}' not found for provider '{p['name']}'")
+                    continue  # Skip this provider if env var is not found
+            elif "api_key" in p and p["api_key"]:
+                # Use direct API key from config
+                print(f"add provider {p['name']} (API key from config)")
+            else:
+                print(f"❌ Error: No valid API key found for provider '{p['name']}'")
+                continue  # Skip this provider
+
+            processed_providers.append(provider_copy)
+
+            # Load model lists
             for m in ["big_models", "middle_models", "small_models"]:
-                if m in provider:
-                    getattr(self, m).extend(provider[m])
+                if m in p:
+                    getattr(self, m).extend(p[m])
+
+        self.provider = processed_providers
         print("loaded big_models:", self.big_models)
         print("loaded middle_models:", self.middle_models)
         print("loaded small_models:", self.small_models)
+
+    def validate_provider_config(self, provider: Dict[str, Any]) -> bool:
+        """Validate provider configuration for API key setup"""
+        has_api_key = "api_key" in provider and provider["api_key"]
+        has_env_key = "env_key" in provider and provider["env_key"]
+
+        if has_api_key and has_env_key:
+            print(f"⚠️  Warning: Provider '{provider.get('name', 'unknown')}' has both 'api_key' and 'env_key'. Using 'env_key'.")
+            return True
+        elif has_api_key or has_env_key:
+            return True
+        else:
+            print(f"❌ Error: Provider '{provider.get('name', 'unknown')}' must have either 'api_key' or 'env_key'")
+            return False
 
     def validate_api_key(self):
         """Basic API key validation"""
