@@ -61,7 +61,7 @@ class DeepSeekTransformer(AbstractTransformer):
 
     def should_apply_to(self, provider: str, model: str) -> bool:
         """
-        Apply this transformer to DeepSeek models.
+        Apply this transformer to DeepSeek models with enhanced provider:model detection.
 
         Args:
             provider: The provider name
@@ -70,9 +70,18 @@ class DeepSeekTransformer(AbstractTransformer):
         Returns:
             True if transformer should be applied
         """
+        # Enhanced detection: check both provider name and model name
+        provider_match = provider.lower() == "deepseek"
         model_match = "deepseek" in model.lower()
 
-        return model_match
+        # Apply if either the provider is DeepSeek OR the model name contains "deepseek"
+        # This handles both explicit DeepSeek provider and DeepSeek models from other providers
+        should_apply = provider_match or model_match
+
+        if should_apply:
+            logger.debug(f"DeepSeek transformer will apply to provider={provider}, model={model}")
+
+        return should_apply
 
     def transformRequestIn(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """

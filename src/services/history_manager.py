@@ -33,6 +33,7 @@ class HistoryManager:
         openai_request: Optional[Dict[str, Any]] = None,
         user_agent: Optional[str] = None,
         is_streaming: bool = False,
+        provider: Optional[str] = None,
     ) -> bool:
         """Log a new request to the history"""
         try:
@@ -47,6 +48,7 @@ class HistoryManager:
                 user_agent=user_agent,
                 is_streaming=is_streaming,
                 openai_request=openai_request,
+                provider=provider,
             )
 
             if success:

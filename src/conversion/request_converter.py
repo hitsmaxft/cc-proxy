@@ -113,8 +113,10 @@ def convert_claude_to_openai(
     if extra_query:
         openai_request["extra_query"] = extra_query
 
+    # Enhanced logging with provider information
+    provider_info = f" (Provider: {openai_model['provider']})" if 'provider' in openai_model else ""
     logger.debug(
-        f"Converted Claude request to OpenAI format: {json.dumps(openai_request, indent=2, ensure_ascii=False)}"
+        f"Converted Claude request to OpenAI format for model {openai_model['model']}{provider_info}: {json.dumps(openai_request, indent=2, ensure_ascii=False)}"
     )
     # Add optional parameters
     if claude_request.stop_sequences:

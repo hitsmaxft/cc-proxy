@@ -316,7 +316,7 @@ class ConfigUpdateRequest(BaseModel):
 
 @router.get("/api/config/get")
 async def get_config():
-    """Get current model configuration and available options"""
+    """Get current model configuration and available options with provider:model format"""
     # Get today's model usage from database
     from datetime import date
 
@@ -325,29 +325,33 @@ async def get_config():
     try:
         model_usage = await history_manager.get_token_usage_summary(today, today)
 
-        # Create model counters for today's usage
+        # Create model counters for today's usage with provider context
         today_counts = {}
-        for usage in model_usage["by_model"]:
-            model_key = usage["model"].replace("-", "_")
-            today_counts[f"{model_key}"] = usage["request_count"]
+        for usage in model_usage["by_model"]:  # Correctly access by_model list
+            model_id = usage.get("model_id", usage["model"])  # Fallback for legacy data
+            model_key = model_id.replace(":", "_").replace("-", "_")
+            today_counts[model_key] = usage["request_count"]
 
         # Add current configured models
         today_counts["big_model"] = today_counts.get(
-            f"{config.big_model.replace('-', '_')}", 0
+            config.big_model.replace(":", "_").replace("-", "_"), 0
         )
         today_counts["middle_model"] = today_counts.get(
-            f"{config.middle_model.replace('-', '_')}", 0
+            config.middle_model.replace(":", "_").replace("-", "_"), 0
         )
         today_counts["small_model"] = today_counts.get(
-            f"{config.small_model.replace('-', '_')}", 0
+            config.small_model.replace(":", "_").replace("-", "_"), 0
         )
 
     except Exception as e:
         logger.error(f"Error getting today's model usage: {e}")
         today_counts = {}
 
+    # Get enhanced model catalog from model manager
+    model_catalog = model_manager.get_model_catalog()
+
     return {
-        "message": "Claude-to-OpenAI API Proxy v1.0.0",
+        "message": "Claude-to-OpenAI API Proxy v1.0.0 (Enhanced with Provider:Model Support)",
         "status": "running",
         "config": {
             "openai_base_url": config.openai_base_url,
@@ -355,6 +359,7 @@ async def get_config():
             "api_key_configured": bool(config.openai_api_key),
             "client_api_key_validation": bool(config.anthropic_api_key),
             "big_model": config.big_model,
+            "middle_model": config.middle_model,
             "small_model": config.small_model,
         },
         "current": {
@@ -363,26 +368,61 @@ async def get_config():
             "SMALL_MODEL": config.small_model,
         },
         "available": {
-            "BIG_MODELS": config.big_models,
-            "MIDDLE_MODELS": config.middle_models,
-            "SMALL_MODELS": config.small_models,
+            "BIG_MODELS": model_catalog["models_by_category"]["big_models"],
+            "MIDDLE_MODELS": model_catalog["models_by_category"]["middle_models"],
+            "SMALL_MODELS": model_catalog["models_by_category"]["small_models"],
         },
+        "providers": model_catalog["providers"],
+        "model_catalog": model_catalog,
         "base_url": config.openai_base_url,
         "model_counts": today_counts,
+        "format_version": "provider:model",
     }
 
 
 @router.post("/api/config/update")
 async def update_config(request: ConfigUpdateRequest):
-    """Update model configuration dynamically"""
+    """Update model configuration dynamically with provider:model format validation"""
     try:
-        # Update config in memory
+        updated_fields = []
+
+        # Update config in memory with validation
         if request.BIG_MODEL is not None:
-            config.big_model = request.BIG_MODEL
+            # Normalize and validate the model ID
+            normalized_model = config._normalize_model_id(request.BIG_MODEL)
+            if config._is_model_available(normalized_model):
+                old_model = config.big_model
+                config.big_model = normalized_model
+                updated_fields.append(f"BIG_MODEL: {old_model} -> {normalized_model}")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model '{request.BIG_MODEL}' is not available. Please check provider configuration."
+                )
+
         if request.MIDDLE_MODEL is not None:
-            config.middle_model = request.MIDDLE_MODEL
+            normalized_model = config._normalize_model_id(request.MIDDLE_MODEL)
+            if config._is_model_available(normalized_model):
+                old_model = config.middle_model
+                config.middle_model = normalized_model
+                updated_fields.append(f"MIDDLE_MODEL: {old_model} -> {normalized_model}")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model '{request.MIDDLE_MODEL}' is not available. Please check provider configuration."
+                )
+
         if request.SMALL_MODEL is not None:
-            config.small_model = request.SMALL_MODEL
+            normalized_model = config._normalize_model_id(request.SMALL_MODEL)
+            if config._is_model_available(normalized_model):
+                old_model = config.small_model
+                config.small_model = normalized_model
+                updated_fields.append(f"SMALL_MODEL: {old_model} -> {normalized_model}")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model '{request.SMALL_MODEL}' is not available. Please check provider configuration."
+                )
 
         # Save to database
         await history_manager.get_db().save_model_config(
@@ -394,17 +434,24 @@ async def update_config(request: ConfigUpdateRequest):
             config.big_model, config.middle_model, config.small_model
         )
 
+        # Log the configuration update
+        logger.info(f"Model configuration updated: {', '.join(updated_fields)}")
+
         # Return updated configuration
         return {
             "status": "success",
             "message": "Configuration updated successfully and saved to database",
+            "changes": updated_fields,
             "current": {
                 "BIG_MODEL": config.big_model,
                 "MIDDLE_MODEL": config.middle_model,
                 "SMALL_MODEL": config.small_model,
             },
             "timestamp": datetime.now().isoformat(),
+            "format_version": "provider:model",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))

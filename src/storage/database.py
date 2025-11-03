@@ -133,9 +133,20 @@ class MessageHistoryDatabase:
                 if "openai_request" not in column_names:
                     logger.info("Adding openai_request column to message_history table")
                     await db.execute("""
-                        ALTER TABLE message_history 
+                        ALTER TABLE message_history
                         ADD COLUMN openai_request TEXT
                     """)
+
+                # Add provider column for provider:model format support
+                if "provider" not in column_names:
+                    logger.info("Adding provider column to message_history table for provider:model format")
+                    await db.execute("""
+                        ALTER TABLE message_history
+                        ADD COLUMN provider TEXT DEFAULT 'Unknown'
+                    """)
+
+                    # Migrate existing data - extract provider from actual_model if present
+                    await self._migrate_existing_provider_data(db)
 
                 # Create index for better query performance
                 await db.execute("""
@@ -167,6 +178,61 @@ class MessageHistoryDatabase:
             logger.error(f"Failed to initialize message history database: {e}")
             raise
 
+    async def _migrate_existing_provider_data(self, db):
+        """Migrate existing data to extract provider information from actual_model"""
+        try:
+            # Get all existing records with actual_model data
+            cursor = await db.execute("SELECT id, actual_model FROM message_history WHERE provider = 'Unknown' OR provider IS NULL")
+            records = await cursor.fetchall()
+
+            migrated_count = 0
+            for record in records:
+                record_id, actual_model = record
+                if actual_model and ':' in actual_model:
+                    # Extract provider from provider:model format
+                    provider_name, model_name = actual_model.split(':', 1)
+                    await db.execute(
+                        "UPDATE message_history SET provider = ?, actual_model = ? WHERE id = ?",
+                        (provider_name, model_name, record_id)
+                    )
+                    migrated_count += 1
+                else:
+                    # For legacy data without provider prefix, try to infer from common patterns
+                    provider_name = self._infer_provider_from_model(actual_model) if actual_model else 'Unknown'
+                    await db.execute(
+                        "UPDATE message_history SET provider = ? WHERE id = ?",
+                        (provider_name, record_id)
+                    )
+
+            await db.commit()
+            logger.info(f"Migrated provider information for {migrated_count} records with provider:model format")
+
+        except Exception as e:
+            logger.error(f"Failed to migrate existing provider data: {e}")
+
+    def _infer_provider_from_model(self, model_name: str) -> str:
+        """Infer provider from model name patterns for legacy data"""
+        if not model_name:
+            return 'Unknown'
+
+        model_lower = model_name.lower()
+
+        # Common provider patterns
+        if model_lower.startswith('gpt-') or model_lower.startswith('o1-'):
+            return 'OpenAI'
+        elif model_lower.startswith('deepseek-'):
+            return 'DeepSeek'
+        elif model_lower.startswith('claude-'):
+            return 'Anthropic'
+        elif model_lower.startswith('ep-'):
+            return 'ARK'
+        elif model_lower.startswith('doubao-'):
+            return 'Doubao'
+        elif 'azure' in model_lower:
+            return 'Azure'
+        else:
+            return 'Unknown'
+
     async def store_request(
         self,
         request_id: str,
@@ -176,6 +242,7 @@ class MessageHistoryDatabase:
         user_agent: Optional[str] = None,
         is_streaming: bool = False,
         openai_request: Optional[Dict[str, Any]] = None,
+        provider: Optional[str] = None,
     ) -> bool:
         """Store a request in the database"""
         await self.initialize()
@@ -189,13 +256,20 @@ class MessageHistoryDatabase:
                 else None
             )
 
+            # If provider is not provided, try to infer it from actual_model
+            if provider is None:
+                if actual_model and ':' in actual_model:
+                    provider, actual_model = actual_model.split(':', 1)
+                else:
+                    provider = self._infer_provider_from_model(actual_model)
+
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     """
-                    INSERT INTO message_history 
-                    (request_id, timestamp, model_name, actual_model, request_data, user_agent, 
-                     is_streaming, request_length, status, input_tokens, output_tokens, total_tokens, openai_request)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO message_history
+                    (request_id, timestamp, model_name, actual_model, request_data, user_agent,
+                     is_streaming, request_length, status, input_tokens, output_tokens, total_tokens, openai_request, provider)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         request_id,
@@ -211,6 +285,7 @@ class MessageHistoryDatabase:
                         0,  # output_tokens - will be updated later
                         0,  # total_tokens - will be updated later
                         openai_request_json,
+                        provider,
                     ),
                 )
                 await db.commit()
@@ -303,10 +378,10 @@ class MessageHistoryDatabase:
 
         try:
             query = """
-                SELECT id, request_id, timestamp, model_name, actual_model, request_data, 
-                       response_data, user_agent, is_streaming, request_length, 
-                       response_length, status, input_tokens, output_tokens, total_tokens, openai_request
-                FROM message_history 
+                SELECT id, request_id, timestamp, model_name, actual_model, request_data,
+                       response_data, user_agent, is_streaming, request_length,
+                       response_length, status, input_tokens, output_tokens, total_tokens, openai_request, provider
+                FROM message_history
                 WHERE 1=1
             """
 
@@ -383,6 +458,14 @@ class MessageHistoryDatabase:
                         except (KeyError, IndexError):
                             pass
 
+                        # Handle provider column that might not exist in older schemas
+                        provider = 'Unknown'
+                        try:
+                            provider = row["provider"] or 'Unknown'
+                        except (KeyError, IndexError):
+                            # For older schemas without provider column, try to infer
+                            provider = self._infer_provider_from_model(row["actual_model"])
+
                         messages.append(
                             {
                                 "id": row["id"],
@@ -390,6 +473,7 @@ class MessageHistoryDatabase:
                                 "timestamp": row["timestamp"],
                                 "model_name": row["model_name"],
                                 "actual_model": row["actual_model"],
+                                "provider": provider,
                                 "request_data": request_data,
                                 "response_data": response_data,
                                 "openai_request": openai_request,
@@ -446,8 +530,9 @@ class MessageHistoryDatabase:
 
         try:
             query = """
-                SELECT 
+                SELECT
                     actual_model,
+                    COALESCE(provider, 'Unknown') as provider,
                     COUNT(*) as request_count,
                     SUM(COALESCE(input_tokens, 0)) as total_input_tokens,
                     SUM(COALESCE(output_tokens, 0)) as total_output_tokens,
@@ -459,7 +544,7 @@ class MessageHistoryDatabase:
                     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_requests,
                     SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial_requests,
                     SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_requests
-                FROM message_history 
+                FROM message_history
                 WHERE actual_model IS NOT NULL AND actual_model != ''
             """
 
@@ -479,7 +564,7 @@ class MessageHistoryDatabase:
                 params.append(end_datetime)
 
             query += """
-                GROUP BY actual_model
+                GROUP BY actual_model, provider
                 ORDER BY total_tokens DESC
             """
 
@@ -490,9 +575,15 @@ class MessageHistoryDatabase:
 
                     summary = []
                     for row in rows:
+                        # Create model_id in provider:model format
+                        provider = row["provider"] or "Unknown"
+                        model_id = f"{provider}:{row['actual_model']}" if provider != "Unknown" else row["actual_model"]
+
                         summary.append(
                             {
                                 "model": row["actual_model"],
+                                "provider": provider,
+                                "model_id": model_id,
                                 "request_count": row["request_count"] or 0,
                                 "total_input_tokens": row["total_input_tokens"] or 0,
                                 "total_output_tokens": row["total_output_tokens"] or 0,
