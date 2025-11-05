@@ -20,9 +20,13 @@ from src.conversion.response_converter import (
 from src.core.model_manager import model_manager
 from src.services.history_manager import history_manager
 from src.api.websocket_manager import broadcast_model_update, broadcast_history_update
+from src.api.web_search import WebSearchHandler
 
 
 router = APIRouter()
+
+# Initialize web search handler
+web_search_handler = WebSearchHandler()
 
 # Setup Jinja2 templates
 templates = Jinja2Templates(directory=f"{SrcDir}/assets")
@@ -89,6 +93,44 @@ async def create_message(
         # for key in http_request.headers:
         #     if "anthropic" in key or "claude" in key:
         #         extra_headers[key] = http_request.headers[key]
+
+        # Check for web search bypass before normal LLM processing
+        provider_name = model_manager.get_provider_name_from_model(request.model)
+        if provider_name and config.should_use_web_search_bypass(provider_name):
+            # Check if this is a web search request
+            if web_search_handler.detect_web_search_request(request):
+                logger.info(f"Using web search bypass for provider: {provider_name}")
+
+                # Get web search configuration
+                web_search_config = config.get_web_search_config(provider_name)
+                provider_config = config.get_web_search_provider_config(web_search_config)
+
+                # Handle web search request
+                web_search_response = await web_search_handler.handle_web_search_request(
+                    claude_request=request,
+                    provider_config=provider_config,
+                    web_search_config=web_search_config
+                )
+
+                if web_search_response:
+                    # Log the web search request to history
+                    await history_manager.log_request(
+                        request_id=request_id,
+                        model_name=request.model,
+                        actual_model=f"web_search:{web_search_config}",
+                        request_data=request.dict(exclude_none=True),
+                        user_agent=user_agent,
+                        is_streaming=False,
+                    )
+
+                    # Log response to history
+                    await history_manager.log_response(
+                        request_id=request_id,
+                        response_data=web_search_response,
+                        status_code=200,
+                    )
+
+                    return JSONResponse(content=web_search_response)
 
         # Convert Claude request to OpenAI format
         openai_request = convert_claude_to_openai(request, model_manager)

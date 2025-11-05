@@ -36,9 +36,28 @@ small_models=["deepseek-chat"]
 name = "OpenRouter"
 base_url = "https://openrouter.ai/api/v1"
 api_key="your-openrouter-api-key"
+web_search = "openrouter.online"  # Use OpenRouter's built-in web search
 big_models=["anthropic/claude-3-opus-20240229", "openai/gpt-4o"]
 middle_models=["anthropic/claude-3-sonnet-20240229"]
 small_models=["anthropic/claude-3-haiku-20240307"]
+
+[[provider]]
+name = "Bocha-Direct"
+base_url = ""  # Not used for direct web search
+web_search = "bocha.websearch"  # Use Bocha as direct web search provider
+# Note: This provider bypasses LLM and only provides web search results
+big_models=[]  # Not used
+middle_models=[]  # Not used
+small_models=[]  # Not used
+
+[[provider]]
+name = "Bocha-Plus-LLM"
+base_url = "https://api.openai.com/v1"
+api_key="your-openai-api-key"
+web_search = "bocha.websearch"  # Use Bocha for search, OpenAI for LLM
+big_models=["gpt-4o"]
+middle_models=["gpt-4o"]
+small_models=["gpt-4o-mini"]
 
 # Transformer configuration
 [transformers]
@@ -53,3 +72,9 @@ enabled = true
 providers = ["openrouter"]
 models = ["*"]
 cache_control = false
+
+# Web Search Provider Configuration
+[web_search_providers.bocha.websearch]
+api_key = "your-bocha-api-token"  # or use env_key below
+env_key = "BOCHA_API_TOKEN"  # Load API token from environment variable (recommended)
+base_url = "https://api.bochaai.com/v1"  # Optional: override default base URL

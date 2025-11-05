@@ -243,5 +243,11 @@ class ModelManager:
         """Return model request counters for /api/config/get"""
         return self.request_counters
 
+    def get_provider_name_from_model(self, model: str) -> Optional[str]:
+        """Extract provider name from model string"""
+        if ':' in model:
+            return model.split(':', 1)[0]
+        return None
+
 
 model_manager = ModelManager(config)

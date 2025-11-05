@@ -1,0 +1,66 @@
+# Example configuration for Web Search Plugin System
+# Save this as your providers.toml to test web search functionality
+
+[config]
+port = 8082
+host = "127.0.0.1"
+log_level = "INFO"
+db_file = "proxy.db"
+
+# Default models (not used for direct web search)
+big_model = "Bocha-Direct:any-model"
+middle_model = "Bocha-Direct:any-model"
+small_model = "Bocha-Direct:any-model"
+
+# Direct Bocha Web Search Provider (LLM bypass)
+[[provider]]
+name = "Bocha-Direct"
+base_url = ""  # Not used for direct web search
+web_search = "bocha.websearch"
+# Note: This provider bypasses LLM and only provides web search results
+big_models = []
+middle_models = []
+small_models = []
+
+# Hybrid Provider (Bocha search + OpenAI LLM)
+[[provider]]
+name = "Bocha-Plus-OpenAI"
+base_url = "https://api.openai.com/v1"
+api_key = "your-openai-api-key"
+web_search = "bocha.websearch"
+big_models = ["gpt-4o"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini"]
+
+# Traditional OpenRouter with built-in web search
+[[provider]]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+api_key = "your-openrouter-api-key"
+web_search = "openrouter.online"
+big_models = ["anthropic/claude-3-opus-20240229"]
+middle_models = ["anthropic/claude-3-sonnet-20240229"]
+small_models = ["anthropic/claude-3-haiku-20240307"]
+
+# Web Search Provider Configuration
+[web_search_providers.bocha.websearch]
+# Option 1: Direct API token (not recommended for production)
+api_key = "your-bocha-api-token"
+
+# Option 2: Environment variable (recommended)
+env_key = "BOCHA_API_TOKEN"
+
+# Optional: Custom base URL
+base_url = "https://api.bochaai.com/v1"
+
+# Optional: Add other web search providers here
+# [web_search_providers.google.search]
+# api_key = "your-google-api-key"
+# search_engine_id = "your-search-engine-id"
+
+# Transformer configuration (optional)
+[transformers.openrouter]
+enabled = true
+providers = ["openrouter"]
+models = ["*"]
+cache_control = false

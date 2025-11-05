@@ -10,9 +10,16 @@ class ModelProvider(TypedDict):
     base_url: str
     api_key: Optional[str]
     env_key: Optional[str]
+    web_search: Optional[str]  # New field for web search provider
     big_models: List[str]
     middle_models: List[str]
     small_models: List[str]
+
+
+class WebSearchProvider(TypedDict):
+    api_key: Optional[str]
+    env_key: Optional[str]
+    base_url: Optional[str]
 
 
 # Configuration
@@ -29,6 +36,7 @@ class Config:
 
     config: Dict[str, Any]
     provider: List[ModelProvider]
+    web_search_providers: Dict[str, WebSearchProvider] = {}  # New field for web search providers
 
     provider_names: List[str]
     small_model: str
@@ -51,6 +59,11 @@ class Config:
             else:
                 setattr(self, k, v)
         self.load_providers(self.provider)
+
+        # Load web search providers if configured
+        if hasattr(self, 'web_search_providers') and self.web_search_providers:
+            self.load_web_search_providers(self.web_search_providers)
+
         self._normalize_model_references()
 
     def load_providers(self, provider: List[Dict[str, Any]]):
@@ -285,6 +298,49 @@ class Config:
         except Exception as e:
             print(f"⚠️  Warning: Could not load model config from database: {e}")
             return False
+
+    def get_web_search_config(self, provider_name: str) -> Optional[str]:
+        """Get web search configuration for a specific provider"""
+        for provider in self.provider:
+            if provider.get("name") == provider_name:
+                return provider.get("web_search")
+        return None
+
+    def get_web_search_provider_config(self, web_search_type: str) -> Dict[str, Any]:
+        """Get configuration for a web search provider type"""
+        if not self.web_search_providers:
+            return {}
+
+        provider_config = self.web_search_providers.get(web_search_type, {})
+
+        # Resolve API key from environment if env_key is specified
+        if "env_key" in provider_config and provider_config["env_key"]:
+            env_var_name = provider_config["env_key"]
+            env_value = os.getenv(env_var_name)
+            if env_value:
+                config_copy = provider_config.copy()
+                config_copy["api_key"] = env_value
+                return config_copy
+            else:
+                print(f"⚠️  Warning: Environment variable '{env_var_name}' not found for web search provider '{web_search_type}'")
+
+        return provider_config
+
+    def load_web_search_providers(self, web_search_providers_config: Dict[str, Any]):
+        """Load web search provider configurations"""
+        self.web_search_providers = web_search_providers_config
+        print(f"🔍 Loaded web search providers: {list(self.web_search_providers.keys())}")
+
+    def should_use_web_search_bypass(self, provider_name: str) -> bool:
+        """Check if provider should use web search bypass"""
+        web_search_config = self.get_web_search_config(provider_name)
+        if not web_search_config:
+            return False
+
+        # Check if it's a direct web search provider (starts with bocha., or specific types)
+        return (web_search_config.startswith("bocha.") or
+                web_search_config == "direct" or
+                web_search_config == "bocha.websearch")
 
 
 # Global config instance - will be initialized from main.py
