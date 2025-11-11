@@ -286,6 +286,13 @@ def convert_claude_mixed_content_message(msg: ClaudeMessage) -> List[Dict[str, A
         # Fallback to normal processing
         return [convert_claude_user_message(msg)]
 
+    if len(msg.content) == 1  and any(
+                block.type == Constants.CONTENT_TOOL_RESULT
+                for block in msg.content
+                if hasattr(block, "type")
+            ):
+        return convert_claude_tool_results(msg)
+
     # Separate content by type
     text_blocks = []
     image_blocks = []
@@ -296,7 +303,6 @@ def convert_claude_mixed_content_message(msg: ClaudeMessage) -> List[Dict[str, A
                 text_blocks.append(block)
             elif block.type == Constants.CONTENT_TOOL_RESULT:
                 # add at the beginning
-
                 if (len(messages) > 0):
                     raise ValueError("Too many Tool result message in a mixed user message")
                 content = parse_tool_result_content(block.content)
@@ -315,7 +321,6 @@ def convert_claude_mixed_content_message(msg: ClaudeMessage) -> List[Dict[str, A
     # Create user message with text and image content (if any)
     if text_blocks:
         user_content = []
-
 
         # Add text content
         for block in text_blocks:

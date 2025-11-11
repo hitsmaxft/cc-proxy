@@ -244,9 +244,12 @@ async def create_message(
     except Exception as e:
         import traceback
 
-        logger.error(f"Unexpected error processing request: {e}")
+        logger.error(f"Unexpected error processing request: {e}", exc_info=True)
         logger.error(traceback.format_exc())
-        error_message = client.classify_openai_error(str(e))
+        if not client:
+                error_message = client.classify_openai_error(str(e))
+        else:
+            error_message = "Internal server error"
         raise HTTPException(status_code=500, detail=error_message)
 
 
