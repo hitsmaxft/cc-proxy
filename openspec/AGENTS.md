@@ -325,7 +325,7 @@ openspec list
 
 # 2) Choose change id and scaffold
 CHANGE=add-two-factor-auth
-mkdir -p openspec/changes/$CHANGE/{specs/auth}
+mkdir -p openspec/changes/$CHANGE/specs/auth
 printf "## Why\n...\n\n## What Changes\n- ...\n\n## Impact\n- ...\n" > openspec/changes/$CHANGE/proposal.md
 printf "## 1. Implementation\n- [ ] 1.1 ...\n" > openspec/changes/$CHANGE/tasks.md
 

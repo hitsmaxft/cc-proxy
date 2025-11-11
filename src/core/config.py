@@ -11,6 +11,7 @@ class ModelProvider(TypedDict):
     api_key: Optional[str]
     env_key: Optional[str]
     web_search: Optional[str]  # New field for web search provider
+    provider_type: Optional[str]  # "openai" (default) or "anthropic"
     big_models: List[str]
     middle_models: List[str]
     small_models: List[str]
@@ -78,6 +79,10 @@ class Config:
 
             provider_copy = p.copy()
 
+            # Default provider_type to "openai" if not specified
+            if "provider_type" not in provider_copy:
+                provider_copy["provider_type"] = "openai"
+
             # Handle API key resolution (env_key takes priority over api_key)
             if "env_key" in p and p["env_key"]:
                 # Load API key from environment variable
@@ -85,13 +90,13 @@ class Config:
                 api_key = os.getenv(env_var_name)
                 if api_key:
                     provider_copy["api_key"] = api_key
-                    print(f"add provider {p['name']} (API key loaded from env: {env_var_name})")
+                    print(f"add provider {p['name']} (type: {provider_copy.get('provider_type', 'openai')}, API key loaded from env: {env_var_name})")
                 else:
                     print(f"❌ Error: Environment variable '{env_var_name}' not found for provider '{p['name']}'")
                     continue  # Skip this provider if env var is not found
             elif "api_key" in p and p["api_key"]:
                 # Use direct API key from config
-                print(f"add provider {p['name']} (API key from config)")
+                print(f"add provider {p['name']} (type: {provider_copy.get('provider_type', 'openai')}, API key from config)")
             else:
                 print(f"❌ Error: No valid API key found for provider '{p['name']}'")
                 continue  # Skip this provider
@@ -109,18 +114,24 @@ class Config:
         print("loaded small_models:", self.small_models)
 
     def validate_provider_config(self, provider: Dict[str, Any]) -> bool:
-        """Validate provider configuration for API key setup"""
+        """Validate provider configuration for API key setup and provider type"""
+        # Validate API key setup
         has_api_key = "api_key" in provider and provider["api_key"]
         has_env_key = "env_key" in provider and provider["env_key"]
 
         if has_api_key and has_env_key:
             print(f"⚠️  Warning: Provider '{provider.get('name', 'unknown')}' has both 'api_key' and 'env_key'. Using 'env_key'.")
-            return True
-        elif has_api_key or has_env_key:
-            return True
-        else:
+        elif not (has_api_key or has_env_key):
             print(f"❌ Error: Provider '{provider.get('name', 'unknown')}' must have either 'api_key' or 'env_key'")
             return False
+
+        # Validate provider_type
+        provider_type = provider.get("provider_type", "openai")
+        if provider_type not in ["openai", "anthropic"]:
+            print(f"❌ Error: Provider '{provider.get('name', 'unknown')}' has invalid provider_type '{provider_type}'. Must be 'openai' or 'anthropic'")
+            return False
+
+        return True
 
     def _normalize_model_references(self):
         """Normalize model references to provider:model format"""

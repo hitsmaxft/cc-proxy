@@ -4,8 +4,8 @@ A proxy server that enables Claude Code to work with OpenAI-compatible API provi
 """
 
 # Load environment variables from .env file
-from dotenv import load_dotenv
-load_dotenv(encoding='utf8')
+#from dotenv import load_dotenv
+#load_dotenv(encoding='utf-8')
 
 
 __version__ = "1.0.0"

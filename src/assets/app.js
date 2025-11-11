@@ -125,6 +125,9 @@ async function fetchHealth() {
 }
 
 function updateConfigDisplay(config) {
+    // Store provider info globally for access in updateModelSection
+    window.providerInfo = config.providers || {};
+
     // Update base URL
     document.getElementById('baseUrl').textContent = `Base URL: ${config.base_url}`;
 
@@ -137,6 +140,9 @@ function updateConfigDisplay(config) {
     if (config.model_counts) {
         updateModelCounts(config.model_counts);
     }
+
+    // Update provider information
+    updateProviderInfo(config.providers);
 
     // Update last update time
     document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
@@ -160,7 +166,22 @@ function updateModelSection(containerId, modelType, availableModels, currentMode
 
         const label = document.createElement('label');
         label.htmlFor = input.id;
-        label.textContent = model;
+
+        // Parse provider info from model name (format: "Provider:model")
+        if (model.includes(':')) {
+            const [providerName, modelName] = model.split(':', 2);
+            // Get provider info from the global provider data
+            const providerData = window.providerInfo && window.providerInfo[providerName];
+            const isNative = providerData && providerData.provider_type === 'anthropic';
+
+            if (isNative) {
+                label.innerHTML = `${model} <span style="color: #28a745; font-size: 0.8em;">[native]</span>`;
+            } else {
+                label.textContent = model;
+            }
+        } else {
+            label.textContent = model;
+        }
 
         optionDiv.appendChild(input);
         optionDiv.appendChild(label);
@@ -313,6 +334,39 @@ function updateModelCounts(modelCounts) {
                         <strong>Total requests: ${totalRequests}</strong>
                     </div>`;
     }
+}
+
+function updateProviderInfo(providers) {
+    const container = document.getElementById('providerInfo');
+    if (!providers || Object.keys(providers).length === 0) {
+        container.innerHTML = '<div style="color: #6c757d; text-align: center;">No providers configured</div>';
+        return;
+    }
+
+    let html = '<div style="font-family: monospace;">';
+
+    Object.entries(providers).forEach(([name, info]) => {
+        const providerType = info.provider_type || 'openai';
+        const typeDisplay = providerType === 'anthropic' ?
+            '<span style="color: #28a745;">[native]</span>' :
+            '<span style="color: #007bff;">[converted]</span>';
+
+        html += `
+            <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 6px; border: 1px solid #dee2e6;">
+                <div style="font-weight: bold; margin-bottom: 5px;">
+                    ${name} ${typeDisplay}
+                </div>
+                <div style="color: #666; font-size: 0.85em;">
+                    Type: ${providerType}<br>
+                    Base URL: ${info.base_url}<br>
+                    Models: ${Object.values(info.models).flat().length} available
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 function startAutoRefresh() {

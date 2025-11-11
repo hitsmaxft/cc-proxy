@@ -8,6 +8,7 @@ class ModelConfig(TypedDict):
     base_url: str
     api_key: str
     provider: str
+    provider_type: str  # "openai" or "anthropic"
 
 
 @dataclass
@@ -18,6 +19,7 @@ class EnhancedModelConfig:
     base_url: str       # Provider base URL
     api_key: str        # Provider API key
     model_id: str       # Full provider:model format
+    provider_type: str = "openai"  # Provider type: "openai" or "anthropic"
 
     @classmethod
     def from_model_id(cls, model_id: str, providers: List[Dict]) -> 'EnhancedModelConfig':
@@ -43,7 +45,8 @@ class EnhancedModelConfig:
             provider=provider_name,
             base_url=provider_config["base_url"],
             api_key=provider_config["api_key"],
-            model_id=f"{provider_name}:{model_name}"
+            model_id=f"{provider_name}:{model_name}",
+            provider_type=provider_config.get("provider_type", "openai")
         )
 
     @classmethod
@@ -66,7 +69,8 @@ class EnhancedModelConfig:
             model=self.model,
             base_url=self.base_url,
             api_key=self.api_key,
-            provider=self.provider
+            provider=self.provider,
+            provider_type=self.provider_type
         )
 
 
@@ -88,6 +92,25 @@ class ModelManager:
 
     def map_claude_model_to_openai_enhanced(self, claude_model: str) -> EnhancedModelConfig:
         """Map Claude model names to OpenAI format using provider:model IDs"""
+        # First check if we can find the exact claude model in any Anthropic provider
+        for provider in self.config.provider:
+            if provider.get("provider_type", "openai") == "anthropic":
+                all_models = (
+                    provider.get("big_models", []) +
+                    provider.get("middle_models", []) +
+                    provider.get("small_models", [])
+                )
+                if claude_model in all_models:
+                    # Found exact match in Anthropic provider, no mapping needed
+                    return EnhancedModelConfig(
+                        model=claude_model,
+                        provider=provider["name"],
+                        base_url=provider["base_url"],
+                        api_key=provider["api_key"],
+                        model_id=f"{provider['name']}:{claude_model}",
+                        provider_type="anthropic"
+                    )
+
         # If it's already an OpenAI model, return as-is with first available provider
         if claude_model.startswith("gpt-") or claude_model.startswith("o1-"):
             key = f"self.{claude_model.replace('-', '_')}"
@@ -143,7 +166,8 @@ class ModelManager:
                     provider=first_provider["name"],
                     base_url=first_provider["base_url"],
                     api_key=first_provider["api_key"],
-                    model_id=f"{first_provider['name']}:{model_name}"
+                    model_id=f"{first_provider['name']}:{model_name}",
+                    provider_type=first_provider.get("provider_type", "openai")
                 )
             else:
                 raise ValueError("No providers configured")
@@ -165,6 +189,7 @@ class ModelManager:
                     base_url=p["base_url"],
                     api_key=p["api_key"],
                     provider=p["name"],
+                    provider_type=p.get("provider_type", "openai"),
                 )
         raise Exception(f"model {model} not found in providers")
 
@@ -211,6 +236,7 @@ class ModelManager:
             catalog["providers"][provider_name] = {
                 "name": provider_name,
                 "base_url": provider["base_url"],
+                "provider_type": provider.get("provider_type", "openai"),
                 "models": {
                     "big_models": [f"{provider_name}:{m}" for m in provider.get("big_models", [])],
                     "middle_models": [f"{provider_name}:{m}" for m in provider.get("middle_models", [])],

@@ -8,9 +8,10 @@ import uuid
 from typing import Optional
 from pydantic import BaseModel
 
-from src.core.config import config, SrcDir,ASSETS_DIR    
+from src.core.config import config, SrcDir,ASSETS_DIR
 from src.core.logging import logger
 from src.core.client import OpenAIClient
+from src.core.client_factory import ClientFactory
 from src.models.claude import ClaudeMessagesRequest, ClaudeTokenCountRequest
 from src.conversion.request_converter import convert_claude_to_openai
 from src.conversion.response_converter import (
@@ -30,13 +31,6 @@ web_search_handler = WebSearchHandler()
 
 # Setup Jinja2 templates
 templates = Jinja2Templates(directory=f"{SrcDir}/assets")
-
-openai_client = OpenAIClient(
-    config.openai_api_key,
-    config.openai_base_url,
-    config.request_timeout,
-    api_version=config.azure_api_version,
-)
 
 
 async def validate_api_key(
@@ -140,11 +134,28 @@ async def create_message(
 
         model_config = model_manager.map_claude_model_to_openai(request.model)
 
+        # Check provider type to decide if conversion is needed
+        provider_type = model_config.get("provider_type", "openai")
+
+        if provider_type == "anthropic":
+            # For Anthropic providers, use the request directly without conversion
+            api_request = request.dict(exclude_none=True)
+            # Ensure model is set correctly for Anthropic
+            api_request["model"] = model_config["model"]
+        else:
+            # Convert Claude request to OpenAI format for OpenAI-compatible providers
+            api_request = convert_claude_to_openai(request, model_manager)
+            # pass extra_headers for openrouter
+            api_request["extra_headers"] = extra_headers
+
+        # Get the appropriate client based on provider type
+        client = ClientFactory.get_client(model_config)
+
         # Log the request to message history
         await history_manager.log_request(
             request_id=request_id,
             model_name=request.model,
-            actual_model=openai_request["model"],
+            actual_model=api_request["model"],
             request_data=request.dict(exclude_none=True),
             user_agent=user_agent,
             is_streaming=request.stream,
@@ -157,34 +168,51 @@ async def create_message(
         if request.stream:
             # Streaming response - wrap in error handling
             try:
-                openai_stream = openai_client.create_chat_completion_stream(
-                    openai_request, request_id, model_config
-                )
-                return StreamingResponse(
-                    convert_openai_streaming_to_claude_with_cancellation(
-                        openai_request,
-                        openai_stream,
-                        request,
-                        logger,
-                        http_request,
-                        openai_client,
-                        request_id,
-                    ),
-                    media_type="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "Connection": "keep-alive",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Headers": "*",
-                    },
-                )
+                if provider_type == "anthropic":
+                    # For Anthropic providers, stream directly without conversion
+                    api_stream = client.create_chat_completion_stream(
+                        api_request, request_id, model_config
+                    )
+                    return StreamingResponse(
+                        api_stream,
+                        media_type="text/event-stream",
+                        headers={
+                            "Cache-Control": "no-cache",
+                            "Connection": "keep-alive",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Headers": "*",
+                        },
+                    )
+                else:
+                    # For OpenAI providers, convert the streaming response
+                    openai_stream = client.create_chat_completion_stream(
+                        api_request, request_id, model_config
+                    )
+                    return StreamingResponse(
+                        convert_openai_streaming_to_claude_with_cancellation(
+                            api_request,
+                            openai_stream,
+                            request,
+                            logger,
+                            http_request,
+                            client,
+                            request_id,
+                        ),
+                        media_type="text/event-stream",
+                        headers={
+                            "Cache-Control": "no-cache",
+                            "Connection": "keep-alive",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Headers": "*",
+                        },
+                    )
             except HTTPException as e:
                 # Convert to proper error response for streaming
                 logger.error(f"Streaming error: {e.detail}")
                 import traceback
 
                 logger.error(traceback.format_exc())
-                error_message = openai_client.classify_openai_error(e.detail)
+                error_message = client.classify_openai_error(e.detail)
                 error_response = {
                     "type": "error",
                     "error": {"type": "api_error", "message": error_message},
@@ -192,14 +220,25 @@ async def create_message(
                 return JSONResponse(status_code=e.status_code, content=error_response)
         else:
             # Non-streaming response
-            openai_response = await openai_client.create_chat_completion(
-                openai_request, request_id, model_config
-            )
-            claude_response = await convert_openai_to_claude_response(
-                openai_response, request, request_id
+            api_response = await client.create_chat_completion(
+                api_request, request_id, model_config
             )
 
-            return claude_response
+            # Check if we need to convert the response
+            if provider_type == "anthropic":
+                # For Anthropic providers, the response is already in Claude format
+                await history_manager.update_response(
+                    request_id=request_id,
+                    response_data=api_response,
+                    actual_model=api_response.get("model", model_config["model"])
+                )
+                return api_response
+            else:
+                # Convert OpenAI response to Claude format
+                claude_response = await convert_openai_to_claude_response(
+                    api_response, request, request_id
+                )
+                return claude_response
     except HTTPException:
         raise
     except Exception as e:
@@ -207,7 +246,7 @@ async def create_message(
 
         logger.error(f"Unexpected error processing request: {e}")
         logger.error(traceback.format_exc())
-        error_message = openai_client.classify_openai_error(str(e))
+        error_message = client.classify_openai_error(str(e))
         raise HTTPException(status_code=500, detail=error_message)
 
 
@@ -267,13 +306,19 @@ async def health_check():
 async def test_connection():
     """Test API connectivity to OpenAI"""
     try:
+        # Get model config for small model to test connectivity
+        model_config = model_manager.map_claude_model_to_openai(config.small_model)
+        client = ClientFactory.get_client(model_config)
+
         # Simple test request to verify API connectivity
-        test_response = await openai_client.create_chat_completion(
+        test_response = await client.create_chat_completion(
             {
                 "model": config.small_model,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 5,
-            }
+            },
+            request_id=None,
+            model_config=model_config
         )
 
         return {

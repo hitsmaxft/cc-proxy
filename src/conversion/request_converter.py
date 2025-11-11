@@ -72,13 +72,24 @@ def convert_claude_to_openai(
         msg = claude_request.messages[i]
 
         if msg.role == Constants.ROLE_USER:
-            openai_message = convert_claude_user_message(msg)
-            openai_messages.append(openai_message)
+            # Check if this user message contains mixed content (text + tool_result)
+            if isinstance(msg.content, list) and any(
+                block.type == Constants.CONTENT_TOOL_RESULT
+                for block in msg.content
+                if hasattr(block, "type")
+            ):
+                # Split mixed content message into separate messages
+                mixed_messages = convert_claude_mixed_content_message(msg)
+                openai_messages.extend(mixed_messages)
+            else:
+                # Normal user message
+                openai_message = convert_claude_user_message(msg)
+                openai_messages.append(openai_message)
         elif msg.role == Constants.ROLE_ASSISTANT:
             openai_message = convert_claude_assistant_message(msg)
             openai_messages.append(openai_message)
 
-            # Check if next message contains tool results
+            # Check if next message contains tool results (legacy handling)
             if i + 1 < len(claude_request.messages):
                 next_msg = claude_request.messages[i + 1]
                 if (
@@ -90,10 +101,9 @@ def convert_claude_to_openai(
                         if hasattr(block, "type")
                     )
                 ):
-                    # Process tool results
-                    i += 1  # Skip to tool result message
-                    tool_results = convert_claude_tool_results(next_msg)
-                    openai_messages.extend(tool_results)
+                    # This will be handled by the user message processing above
+                    # No need to skip here, let the normal flow handle it
+                    pass
 
         i += 1
 
@@ -257,6 +267,90 @@ def convert_claude_tool_results(msg: ClaudeMessage) -> List[Dict[str, Any]]:
                 )
 
     return tool_messages
+
+
+def convert_claude_mixed_content_message(msg: ClaudeMessage) -> List[Dict[str, Any]]:
+    """
+    Convert a Claude message containing mixed content (text + tool_result) into separate OpenAI messages.
+    This ensures no content is lost when a user message contains both text and tool results.
+
+    Args:
+        msg: ClaudeMessage with mixed content
+
+    Returns:
+        List of OpenAI format messages, preserving all content
+    """
+    messages = []
+
+    if not isinstance(msg.content, list):
+        # Fallback to normal processing
+        return [convert_claude_user_message(msg)]
+
+    # Separate content by type
+    text_blocks = []
+    image_blocks = []
+
+    for block in msg.content:
+        if hasattr(block, "type"):
+            if block.type == Constants.CONTENT_TEXT:
+                text_blocks.append(block)
+            elif block.type == Constants.CONTENT_TOOL_RESULT:
+                # add at the beginning
+
+                if (len(messages) > 0):
+                    raise ValueError("Too many Tool result message in a mixed user message")
+                content = parse_tool_result_content(block.content)
+                messages.append(
+                    {
+                        "role": Constants.ROLE_TOOL,
+                        "tool_call_id": block.tool_use_id,
+                        "content": content,
+                    }
+                )
+            elif block.type == Constants.CONTENT_IMAGE:
+                image_blocks.append(block)
+
+    text_blocks.extend(image_blocks)
+
+    # Create user message with text and image content (if any)
+    if text_blocks:
+        user_content = []
+
+
+        # Add text content
+        for block in text_blocks:
+            if block.type == Constants.CONTENT_TEXT:
+                user_content.append({"type": "text", "text": block.text})
+            else:
+                if (
+                    isinstance(block.source, dict)
+                    and block.source.get("type") == "base64"
+                    and "media_type" in block.source
+                    and "data" in block.source
+                ):
+                    user_content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{block.source['media_type']};base64,{block.source['data']}"
+                            },
+                        }
+                    )
+                ## log error fro mailformat image message
+
+        if user_content:
+            # If only one text block, use string format for simplicity
+            if len(user_content) == 1 and user_content[0]["type"] == "text":
+                messages.append({
+                    "role": Constants.ROLE_USER,
+                    "content": user_content[0]["text"]
+                })
+            else:
+                messages.append({
+                    "role": Constants.ROLE_USER,
+                    "content": user_content
+                })
+    return messages
 
 
 def parse_tool_result_content(content):

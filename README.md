@@ -14,7 +14,7 @@ CC-Proxy is a powerful proxy server that significantly improves upon the upstrea
 
 ### Core Proxy Features
 - **Full Claude API Compatibility**: Complete `/v1/messages` endpoint support
-- **Multiple Provider Support**: OpenAI, Azure OpenAI, local models (Ollama), and any OpenAI-compatible API
+- **Multiple Provider Support**: Native Anthropic API, OpenAI, Azure OpenAI, local models (Ollama), and any OpenAI-compatible API
 - **Smart Model Mapping**: Configure BIG, MIDDLE, and SMALL models via environment variables
 - **Function Calling**: Complete tool use support with proper conversion
 - **Streaming Responses**: Real-time SSE streaming support
@@ -64,11 +64,22 @@ env_key = "OPENAI_API_KEY"  # Secure: Load API key from environment
 big_models = ["gpt-4o"]
 middle_models = ["gpt-4o"]
 small_models = ["gpt-4o-mini"]
+
+# Native Anthropic provider (no conversion, lower latency)
+[[provider]]
+name = "Anthropic-Direct"
+provider_type = "anthropic"  # Skip format conversion
+base_url = "https://api.anthropic.com"
+env_key = "ANTHROPIC_API_KEY"
+big_models = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
+middle_models = ["claude-3-5-sonnet-20241022"]
+small_models = ["claude-3-5-haiku-20241022"]
 ```
 
-Set your environment variable before starting:
+Set your environment variables before starting:
 ```bash
 export OPENAI_API_KEY="sk-your-actual-openai-key"
+export ANTHROPIC_API_KEY="sk-ant-your-actual-anthropic-key"
 ```
 
 **Configuration File Locations:**
@@ -164,6 +175,7 @@ small_models = ["gpt-4o-mini"]
 - `base_url` - API base URL
 - `api_key` - API key for the provider (not recommended for production)
 - `env_key` - Name of environment variable containing the API key (recommended for security)
+- `provider_type` - Provider type: `"openai"` (default) or `"anthropic"` (native support, no conversion)
 - `big_models`, `middle_models`, `small_models` - Available models for each tier
 
 **Note:** Use `env_key` instead of `api_key` for better security. If both are specified, `env_key` takes priority.
