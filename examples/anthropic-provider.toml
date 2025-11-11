@@ -1,0 +1,45 @@
+# Example configuration with native Anthropic provider support
+# This configuration demonstrates how to use both OpenAI-compatible and native Anthropic providers
+
+[config]
+port = 8082
+log_level = "INFO"
+# Default model selections (using provider:model format)
+big_model = "Anthropic-Direct:claude-3-5-sonnet-20241022"
+middle_model = "Anthropic-Direct:claude-3-5-sonnet-20241022"
+small_model = "Anthropic-Direct:claude-3-5-haiku-20241022"
+
+# Native Anthropic provider (no conversion needed)
+[[provider]]
+name = "Anthropic-Direct"
+provider_type = "anthropic"  # This tells CC-Proxy to skip format conversion
+base_url = "https://api.anthropic.com"
+env_key = "ANTHROPIC_API_KEY"  # Load API key from environment variable
+big_models = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
+middle_models = ["claude-3-5-sonnet-20241022"]
+small_models = ["claude-3-5-haiku-20241022"]
+
+# OpenAI provider (with conversion)
+[[provider]]
+name = "OpenAI"
+provider_type = "openai"  # Default value, can be omitted
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_API_KEY"
+big_models = ["gpt-4o", "gpt-4-turbo-preview"]
+middle_models = ["gpt-4o"]
+small_models = ["gpt-4o-mini", "gpt-3.5-turbo"]
+
+# Azure OpenAI provider (with conversion)
+[[provider]]
+name = "Azure-OpenAI"
+provider_type = "openai"  # Uses OpenAI format with conversion
+base_url = "https://your-resource.openai.azure.com/openai/deployments/your-deployment"
+env_key = "AZURE_OPENAI_API_KEY"
+api_version = "2024-02-01"  # Azure specific
+big_models = ["gpt-4"]
+middle_models = ["gpt-4"]
+small_models = ["gpt-35-turbo"]
+
+# Mixed usage example - you can switch between providers dynamically
+# The web UI allows switching between all configured providers
+# Native Anthropic providers will have lower latency due to no conversion overhead
