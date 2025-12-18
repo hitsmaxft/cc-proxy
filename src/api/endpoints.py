@@ -700,3 +700,32 @@ async def get_openrouter_credits():
     except Exception as e:
         logger.error(f"Error fetching OpenRouter credits: {e}")
         return {"status": "error", "message": str(e), "data": None}
+
+
+@router.post("/api/event_logging/batch")
+async def event_logging_batch(request: Request):
+    """NOP endpoint for event logging batch requests - accepts and ignores all events"""
+    try:
+        # Read the request body (but don't process it)
+        await request.body()
+
+        # Return success response without doing anything
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Events received and ignored",
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+    except Exception as e:
+        logger.debug(f"Event logging batch request error (ignored): {e}")
+        # Even on error, return success since this is a NOP endpoint
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Events received and ignored",
+                "timestamp": datetime.now().isoformat()
+            }
+        )
